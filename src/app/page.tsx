@@ -33,7 +33,7 @@ export default async function HomePage() {
         <Faq />
         <CtaBand signedIn={signedIn} />
       </main>
-      <SiteFooter />
+      <SiteFooter signedIn={Boolean(user?.email)} />
     </>
   );
 }

@@ -89,7 +89,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             ) : null}
 
             <p className="mt-6 text-xs leading-relaxed text-ink-soft">
-              New here? The same link creates your account. By signing in you agree to the{" "}
+              The same link creates an account if you do not have one. By signing in you agree to the{" "}
               <Link href="/terms" className="font-medium text-ink-muted hover:text-ink">
                 terms
               </Link>{" "}

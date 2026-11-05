@@ -3,6 +3,8 @@ import type { CrawlRunRow } from "@/lib/db/types";
 import type { FactSheetData } from "@/lib/facts/types";
 import type { TemplateField, TemplateSpec } from "@/templates/types";
 import {
+  addressFromLine,
+  addressFromParts,
   addressLines,
   candidateItemSummary,
   completion,
@@ -11,6 +13,7 @@ import {
   formatValue,
   hostPath,
   isEmptyValue,
+  isOneLineAddress,
   isRunFinished,
   listLayout,
   normalizeFields,
@@ -20,6 +23,7 @@ import {
   sectionCounts,
   sourceLabel,
   statusCounts,
+  undoForUserValue,
   urlKey,
 } from "./view";
 
@@ -277,6 +281,35 @@ describe("formatValue", () => {
     expect(isEmptyValue({ text: "  " })).toBe(true);
   });
 
+  it("tells a one-line address from one with parts", () => {
+    const line = "#315, 20385 64 Avenue, Langley, BC V2Y 1N5";
+    expect(isOneLineAddress({ text: line })).toBe(true);
+    expect(isOneLineAddress({ text: line, postalCode: "V2Y 1N5" })).toBe(false);
+    expect(isOneLineAddress({ postalCode: "V2Y 1N5" })).toBe(false);
+    expect(isOneLineAddress({ text: "  " })).toBe(false);
+    // Parts outside the field's keys do not count as parts of this field.
+    expect(isOneLineAddress({ text: line, addressCountry: "CA" }, ["streetAddress", "postalCode"])).toBe(true);
+  });
+
+  it("builds the saved address from parts or from one line", () => {
+    expect(
+      addressFromParts({ streetAddress: " #315, 20385 64 Avenue ", addressLocality: "Langley", addressRegion: "BC", postalCode: "" }),
+    ).toEqual({
+      streetAddress: "#315, 20385 64 Avenue",
+      addressLocality: "Langley",
+      addressRegion: "BC",
+      text: "#315, 20385 64 Avenue, Langley, BC",
+    });
+    expect(addressFromParts({ postalCode: "V2Y 1N5", addressCountry: "CA" }, ["postalCode"])).toEqual({
+      postalCode: "V2Y 1N5",
+      text: "V2Y 1N5",
+    });
+    expect(addressFromParts({ streetAddress: " " })).toEqual({});
+    expect(addressFromLine("  Remote, registered in Delaware ")).toEqual({ text: "Remote, registered in Delaware" });
+    expect(addressFromLine("   ")).toEqual({});
+    expect(isEmptyValue(addressFromLine("   "))).toBe(true);
+  });
+
   it("renders a list in item-shape order", () => {
     expect(
       formatValue(services, [
@@ -353,6 +386,27 @@ describe("sourceLabel", () => {
   it("keys urls without scheme, www, trailing slash, or hash", () => {
     expect(urlKey("https://www.Example.com/About/#team")).toBe("example.com/about");
     expect(hostPath("https://www.example.com/a%20b/")).toBe("example.com/a b");
+  });
+});
+
+describe("undoForUserValue", () => {
+  it("restores what the scan found when it found or contradicted something", () => {
+    const found = { value: "604-533-9163", status: "found" as const, evidence: [] };
+    expect(undoForUserValue({ status: "user_provided", crawled: found })).toBe("restore");
+    expect(undoForUserValue({ status: "user_provided", crawled: { ...found, status: "conflict" } })).toBe("restore");
+  });
+
+  it("offers to clear an answer to a field the scan never found", () => {
+    // applyUserEdit keeps this snapshot when a missing field is answered.
+    const missing = { value: null, status: "missing" as const, evidence: [] };
+    expect(undoForUserValue({ status: "user_provided", crawled: missing })).toBe("clear");
+    expect(undoForUserValue({ status: "user_provided" })).toBe("clear");
+  });
+
+  it("offers nothing for values the person did not provide", () => {
+    expect(undoForUserValue({ status: "found" })).toBeNull();
+    expect(undoForUserValue({ status: "missing" })).toBeNull();
+    expect(undoForUserValue({ status: "conflict", crawled: { value: null, status: "missing", evidence: [] } })).toBeNull();
   });
 });
 

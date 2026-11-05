@@ -126,7 +126,7 @@ export default function DevReviewPage() {
           </div>
         </div>
       </main>
-      <SiteFooter />
+      <SiteFooter signedIn />
     </div>
   );
 }

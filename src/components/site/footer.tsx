@@ -11,7 +11,8 @@ const legalLinks = [
   { href: "/disclaimer", label: "Disclaimer" },
 ];
 
-export function SiteFooter() {
+/** signedIn swaps "Sign In" for Account and Sign Out, as the header does. */
+export function SiteFooter({ signedIn = false }: { signedIn?: boolean }) {
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-line bg-white">
@@ -47,9 +48,22 @@ export function SiteFooter() {
             <a href={`mailto:${config.site.supportEmail}`} className="hover:text-ink">
               Support
             </a>
-            <Link href="/login" className="hover:text-ink">
-              Sign In
-            </Link>
+            {signedIn ? (
+              <>
+                <Link href="/account" className="hover:text-ink">
+                  Account
+                </Link>
+                <form action="/auth/sign-out" method="post">
+                  <button type="submit" className="hover:text-ink">
+                    Sign Out
+                  </button>
+                </form>
+              </>
+            ) : (
+              <Link href="/login" className="hover:text-ink">
+                Sign In
+              </Link>
+            )}
           </nav>
         </div>
         <nav

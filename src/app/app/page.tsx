@@ -71,7 +71,8 @@ export default async function ProjectsPage() {
                   href={`/app/projects/${p.id}`}
                   className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-line bg-white px-5 py-4 shadow-card transition-shadow hover:shadow-pop"
                 >
-                  <span className="min-w-0 flex-1">
+                  {/* A full row on phones, so the status, platform, and date wrap under the name. */}
+                  <span className="min-w-0 grow basis-full sm:basis-0">
                     <span className="block truncate font-semibold text-ink">
                       {p.business_name || p.site_host || p.site_url}
                     </span>

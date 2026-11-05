@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccountMenu } from "./account-menu";
 import { Logo } from "./logo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ export interface HeaderProps {
 /*
   Sticky header from legiitkeywords.com: white at 90% with blur, bottom line,
   max-w-5xl container, muted links hidden on mobile, one small pill CTA.
+  Signed in, phones get a menu button in place of the hidden links.
 */
 export function SiteHeader({ userEmail, isAdmin }: HeaderProps) {
   const signedIn = Boolean(userEmail);
@@ -44,6 +46,7 @@ export function SiteHeader({ userEmail, isAdmin }: HeaderProps) {
               >
                 New project
               </Link>
+              <AccountMenu isAdmin={isAdmin} className="sm:hidden" />
             </>
           ) : (
             <>

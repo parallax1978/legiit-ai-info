@@ -65,10 +65,16 @@ export function ConflictPicker({
         <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         {heading}
       </p>
+      {/*
+        grid-cols-1 (minmax(0, 1fr)) and min-w-0 on each option: otherwise the
+        implicit auto column takes the min-content width of the widest candidate
+        (a long source title that does not wrap) and the candidates spill out of
+        the card on phones.
+      */}
       <RadioGroup
         value={selected}
         onValueChange={(v) => setSelected(String(v))}
-        className="mt-3 gap-2"
+        className="mt-3 grid-cols-1 gap-2"
         aria-label={`Values found for ${field.label}`}
         disabled={busy}
       >
@@ -79,7 +85,7 @@ export function ConflictPicker({
             <label
               key={i}
               className={cn(
-                "flex cursor-pointer gap-3 rounded-lg border bg-white p-3 transition-colors",
+                "flex min-w-0 cursor-pointer gap-3 rounded-lg border bg-white p-3 transition-colors",
                 checked ? "border-brand ring-1 ring-brand" : "border-line hover:border-line-strong",
               )}
             >
@@ -94,7 +100,7 @@ export function ConflictPicker({
         {onTypeOwn ? (
           <label
             className={cn(
-              "flex cursor-pointer items-center gap-3 rounded-lg border bg-white p-3 transition-colors",
+              "flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border bg-white p-3 transition-colors",
               isOther ? "border-brand ring-1 ring-brand" : "border-line hover:border-line-strong",
             )}
           >

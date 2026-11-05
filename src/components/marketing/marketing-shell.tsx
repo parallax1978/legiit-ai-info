@@ -12,7 +12,7 @@ export async function MarketingShell({ children }: { children: React.ReactNode }
     <>
       <SiteHeader userEmail={user?.email} isAdmin={isAdminEmail(user?.email)} />
       {children}
-      <SiteFooter />
+      <SiteFooter signedIn={Boolean(user?.email)} />
     </>
   );
 }

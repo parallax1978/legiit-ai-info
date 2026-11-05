@@ -20,7 +20,7 @@ export function AppShell({
       <main className="flex-1 bg-surface-alt">
         <div className="mx-auto max-w-5xl px-4 py-8">{children}</div>
       </main>
-      <SiteFooter />
+      <SiteFooter signedIn={Boolean(userEmail)} />
     </>
   );
 }

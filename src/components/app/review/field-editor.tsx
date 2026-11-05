@@ -6,7 +6,16 @@ import type { FieldType } from "@/templates/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ADDRESS_KEYS, ADDRESS_LABELS, formatAddress, isAddressValue, isEmptyValue } from "@/lib/projects/view";
+import {
+  ADDRESS_KEYS,
+  ADDRESS_LABELS,
+  addressFromLine,
+  addressFromParts,
+  formatAddress,
+  isAddressValue,
+  isEmptyValue,
+  isOneLineAddress,
+} from "@/lib/projects/view";
 import { EditorActions, type EditorProps } from "./editor-actions";
 import { ListEditor } from "./list-editor";
 
@@ -103,26 +112,40 @@ function ScalarEditor({ field, initial, busy, onSave, onCancel, autoFocus }: Edi
   );
 }
 
+/*
+  An address is edited in parts, or as one line. One that exists only as a
+  line of text (how the merge stores an address a page gave as one string)
+  opens as that line, so the current value is there to correct and nothing
+  typed into one part replaces the rest.
+*/
 function AddressEditor({ field, initial, busy, onSave, onCancel, autoFocus }: EditorProps) {
   const keys = useMemo(() => (field.addressKeys?.length ? field.addressKeys : [...ADDRESS_KEYS]), [field.addressKeys]);
+  const start = isAddressValue(initial) ? initial : null;
+  const [oneLine, setOneLine] = useState(() => start !== null && isOneLineAddress(start, keys));
+  const [line, setLine] = useState(() => start?.text?.trim() ?? "");
   const [parts, setParts] = useState<Record<string, string>>(() => {
-    const base: Record<string, string | undefined> = isAddressValue(initial) ? { ...initial } : {};
+    const base: Record<string, string | undefined> = start ? { ...start } : {};
     return Object.fromEntries(keys.map((k) => [k, base[k] ?? ""]));
   });
 
-  const value = useMemo<AddressValue>(() => {
-    const out: Record<string, string> = {};
-    for (const k of keys) {
-      const v = parts[k]?.trim();
-      if (v) out[k] = v;
-    }
-    const address = out as AddressValue;
-    const text = formatAddress(address);
-    if (text) address.text = text;
-    return address;
-  }, [parts, keys]);
-
+  const fromParts = useMemo(() => addressFromParts(parts, keys), [parts, keys]);
+  const value: AddressValue = oneLine ? addressFromLine(line) : fromParts;
   const empty = isEmptyValue(value);
+
+  const switchMode = () => {
+    if (oneLine) {
+      // Moving to empty parts: start the street with the line so none of it is lost.
+      const street = keys.includes("streetAddress") ? "streetAddress" : keys[0];
+      if (street && line.trim() && !keys.some((k) => parts[k]?.trim())) {
+        setParts((p) => ({ ...p, [street]: line.trim() }));
+      }
+    } else if (!line.trim()) {
+      setLine(formatAddress(fromParts));
+    }
+    setOneLine(!oneLine);
+  };
+
+  const lineId = `edit-${field.id}-line`;
 
   return (
     <form
@@ -139,26 +162,50 @@ function AddressEditor({ field, initial, busy, onSave, onCancel, autoFocus }: Ed
         }
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        {keys.map((k, i) => {
-          const id = `edit-${field.id}-${k}`;
-          return (
-            <div key={k} className={k === "streetAddress" ? "sm:col-span-2" : undefined}>
-              <Label htmlFor={id} className="mb-1 text-xs text-ink-muted">
-                {ADDRESS_LABELS[k] ?? k}
-              </Label>
-              <Input
-                id={id}
-                value={parts[k] ?? ""}
-                onChange={(e) => setParts((p) => ({ ...p, [k]: e.target.value }))}
-                autoFocus={autoFocus && i === 0}
-                disabled={busy}
-                className="bg-white"
-              />
-            </div>
-          );
-        })}
-      </div>
+      {oneLine ? (
+        <div>
+          <Label htmlFor={lineId} className="mb-1 text-xs text-ink-muted">
+            Address
+          </Label>
+          <Input
+            id={lineId}
+            value={line}
+            onChange={(e) => setLine(e.target.value)}
+            autoFocus={autoFocus}
+            disabled={busy}
+            className="bg-white"
+          />
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {keys.map((k, i) => {
+            const id = `edit-${field.id}-${k}`;
+            return (
+              <div key={k} className={k === "streetAddress" ? "sm:col-span-2" : undefined}>
+                <Label htmlFor={id} className="mb-1 text-xs text-ink-muted">
+                  {ADDRESS_LABELS[k] ?? k}
+                </Label>
+                <Input
+                  id={id}
+                  value={parts[k] ?? ""}
+                  onChange={(e) => setParts((p) => ({ ...p, [k]: e.target.value }))}
+                  autoFocus={autoFocus && i === 0}
+                  disabled={busy}
+                  className="bg-white"
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={switchMode}
+        disabled={busy}
+        className="text-xs font-medium text-brand underline-offset-2 hover:underline disabled:opacity-50"
+      >
+        {oneLine ? "Enter it in parts" : "Enter it as one line"}
+      </button>
       <EditorActions busy={busy} disabled={empty} onCancel={onCancel} />
     </form>
   );

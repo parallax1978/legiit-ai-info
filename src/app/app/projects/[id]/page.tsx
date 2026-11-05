@@ -44,6 +44,16 @@ type PageRow = {
   jsonld: JsonLdBlock[];
 };
 
+/**
+ * The row of a read, or a thrown error. A failed read must not look like an
+ * empty one: that would show "Nothing scanned yet" and offer a scan that uses
+ * up the allowance. The error boundary renders instead.
+ */
+function dataOrThrow<T>(what: string, result: { data: T; error: { message: string } | null }): T {
+  if (result.error) throw new Error(`Could not load the ${what}: ${result.error.message}`);
+  return result.data;
+}
+
 async function loadProject(supabase: Supabase, id: string, userId: string): Promise<ProjectRow | null> {
   const { data, error } = await supabase
     .from("projects")
@@ -70,7 +80,7 @@ async function loadRun(supabase: Supabase, project: ProjectRow): Promise<CrawlRu
           .select("*")
           .eq("id", project.latest_crawl_run_id)
           .maybeSingle()
-          .then((r) => r.data)
+          .then((r) => dataOrThrow("scan", r))
       : Promise.resolve(null),
     supabase
       .from("crawl_runs")
@@ -79,7 +89,7 @@ async function loadRun(supabase: Supabase, project: ProjectRow): Promise<CrawlRu
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
-      .then((r) => r.data),
+      .then((r) => dataOrThrow("scan", r)),
   ]);
   if (pointed && newest && newest.id !== pointed.id && newest.created_at > pointed.created_at) return newest;
   return pointed ?? newest ?? null;
@@ -94,7 +104,7 @@ async function loadFactSheet(supabase: Supabase, project: ProjectRow): Promise<F
           .select("*")
           .eq("id", project.latest_fact_sheet_id)
           .maybeSingle()
-          .then((r) => r.data)
+          .then((r) => dataOrThrow("fact sheet", r))
       : Promise.resolve(null),
     supabase
       .from("fact_sheets")
@@ -103,19 +113,20 @@ async function loadFactSheet(supabase: Supabase, project: ProjectRow): Promise<F
       .order("version", { ascending: false })
       .limit(1)
       .maybeSingle()
-      .then((r) => r.data),
+      .then((r) => dataOrThrow("fact sheet", r)),
   ]);
   if (pointed && newest && newest.id !== pointed.id && newest.version > pointed.version) return newest;
   return pointed ?? newest ?? null;
 }
 
 async function loadPages(supabase: Supabase, runId: string): Promise<PageRow[]> {
-  const { data } = await supabase
+  const result = await supabase
     .from("crawl_pages")
     .select("id, url, title, status, rank, reason, http_status, text_chars, error, jsonld")
     .eq("run_id", runId)
     .order("rank", { ascending: true });
-  return (data ?? []) as PageRow[];
+  // A failed read throws; only a read that worked can mean "no pages recorded".
+  return (dataOrThrow("pages of the scan", result) ?? []) as PageRow[];
 }
 
 function templateFor(id: string): TemplateSpec {

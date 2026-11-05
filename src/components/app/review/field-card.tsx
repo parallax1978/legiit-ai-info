@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Info, Pencil } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Info, LoaderCircle, Pencil } from "lucide-react";
 import type { FactField, FactValue } from "@/lib/facts/types";
 import type { TemplateField } from "@/templates/types";
 import { Button } from "@/components/ui/button";
-import { fillCompany, type PageSummary } from "@/lib/projects/view";
+import { fillCompany, undoForUserValue, type PageSummary } from "@/lib/projects/view";
 import { cn } from "@/lib/utils";
 import { ConflictPicker } from "./conflict-picker";
 import { EvidenceList } from "./evidence-list";
@@ -18,6 +18,86 @@ export interface FieldActions {
   pickCandidate: (fieldId: string, index: number) => Promise<boolean>;
   pickItemCandidate: (fieldId: string, conflictKey: string, index: number) => Promise<boolean>;
   clear: (fieldId: string) => Promise<boolean>;
+}
+
+const LINK = "font-medium text-brand underline-offset-2 hover:underline disabled:opacity-50";
+
+/*
+  "You provided this", with the way back. When the scan found a value, the
+  link restores it at once. When the scan found nothing, going back deletes
+  the answer, so the link asks first.
+*/
+function ProvidedNote({
+  undo,
+  busy,
+  onClear,
+}: {
+  undo: "restore" | "clear";
+  busy: boolean;
+  onClear: () => Promise<boolean>;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const clearLink = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+
+  useEffect(() => {
+    if (!confirming && refocus.current) {
+      refocus.current = false;
+      clearLink.current?.focus();
+    }
+  }, [confirming]);
+
+  if (undo === "restore") {
+    return (
+      <p className="mt-2 text-xs text-ink-muted">
+        You provided this.{" "}
+        <button type="button" onClick={() => void onClear()} disabled={busy} className={LINK}>
+          Restore what the scan found
+        </button>
+      </p>
+    );
+  }
+
+  if (!confirming) {
+    return (
+      <p className="mt-2 text-xs text-ink-muted">
+        You provided this.{" "}
+        <button ref={clearLink} type="button" onClick={() => setConfirming(true)} disabled={busy} className={LINK}>
+          Clear my answer
+        </button>
+      </p>
+    );
+  }
+
+  const keep = () => {
+    refocus.current = true;
+    setConfirming(false);
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label="Clear your answer"
+      className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line bg-surface-alt px-3 py-2 text-xs text-ink"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          keep();
+        }
+      }}
+    >
+      <span>Clearing deletes your answer, and the field shows as missing again.</span>
+      <span className="flex gap-2">
+        <Button type="button" variant="destructive" size="xs" disabled={busy} onClick={() => void onClear()}>
+          {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
+          Clear it
+        </Button>
+        <Button type="button" variant="ghost" size="xs" disabled={busy} onClick={keep} autoFocus>
+          Keep it
+        </Button>
+      </span>
+    </div>
+  );
 }
 
 /*
@@ -44,6 +124,7 @@ export function FieldCard({
   const status = data.status;
   const requiredMissing = field.required && status === "missing";
   const editable = status === "found" || status === "user_provided";
+  const undo = undoForUserValue(data);
 
   const save = async (value: FactValue) => {
     const ok = await actions.save(field.id, value);
@@ -89,24 +170,7 @@ export function FieldCard({
         </div>
       </header>
 
-      {status === "user_provided" ? (
-        <p className="mt-2 text-xs text-ink-muted">
-          You provided this.
-          {data.crawled ? (
-            <>
-              {" "}
-              <button
-                type="button"
-                onClick={() => void actions.clear(field.id)}
-                disabled={busy}
-                className="font-medium text-brand underline-offset-2 hover:underline disabled:opacity-50"
-              >
-                Restore what the scan found
-              </button>
-            </>
-          ) : null}
-        </p>
-      ) : null}
+      {undo ? <ProvidedNote undo={undo} busy={busy} onClear={() => actions.clear(field.id)} /> : null}
 
       {data.note ? (
         <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-muted">

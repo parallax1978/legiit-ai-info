@@ -411,6 +411,35 @@ export function formatAddress(a: AddressValue): string {
   return addressLines(a).join(", ");
 }
 
+/**
+ * True for an address that exists only as one line of text, with none of the
+ * given parts set. The merge stores an address that way when a page gives it
+ * as a single string.
+ */
+export function isOneLineAddress(a: AddressValue, keys: readonly string[] = ADDRESS_KEYS): boolean {
+  const parts = a as Record<string, string | undefined>;
+  return Boolean(a.text?.trim()) && !keys.some((k) => parts[k]?.trim());
+}
+
+/** The address an editor saves from its part inputs: trimmed parts, and the one-line text built from them. */
+export function addressFromParts(parts: Record<string, string | undefined>, keys: readonly string[] = ADDRESS_KEYS): AddressValue {
+  const out: Record<string, string> = {};
+  for (const k of keys) {
+    const v = parts[k]?.trim();
+    if (v) out[k] = v;
+  }
+  const address = out as AddressValue;
+  const text = formatAddress(address);
+  if (text) address.text = text;
+  return address;
+}
+
+/** The address an editor saves from a single line. */
+export function addressFromLine(line: string): AddressValue {
+  const text = line.trim();
+  return text ? { text } : {};
+}
+
 /** The item's values in item-shape order, joined with " / ". */
 export function formatListItem(field: Pick<TemplateField, "itemShape">, item: ListItem): string {
   const keys = field.itemShape?.length ? field.itemShape.map((s) => s.key) : Object.keys(item);
@@ -492,6 +521,17 @@ export function candidateItemSummary(
     })
     .filter(Boolean);
   return pairs.length ? pairs.join(", ") : formatListItem(field, item);
+}
+
+/**
+ * How a person can undo their own value. "restore" puts back what the scan
+ * found. "clear" deletes the answer and the field is missing again, which is
+ * all a clear can do when the scan found nothing (the saved snapshot of a
+ * missing field is itself missing). Null when the value is not theirs.
+ */
+export function undoForUserValue(field: Pick<FactField, "status" | "crawled">): "restore" | "clear" | null {
+  if (field.status !== "user_provided") return null;
+  return field.crawled && field.crawled.status !== "missing" ? "restore" : "clear";
 }
 
 /** "[COMPANY]" in a question becomes the company name, or "the business". */
