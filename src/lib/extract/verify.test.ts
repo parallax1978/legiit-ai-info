@@ -189,14 +189,33 @@ describe("verifyFindings value checks", () => {
     expect(kept).toEqual(honest);
   });
 
-  it("checks the year, the day, and a named month of a date, not a month number", () => {
-    expect(check(page("founded_date", "2018-03-07", "It launched on February 7, 2018")).reason).toBe(
-      "founded_date: the month is not the one the quote names",
-    );
-    expect(check(page("founded_date", "2018-02-09", "It launched on February 7, 2018")).reason).toBe(
-      "founded_date: 9 is not in the quote",
-    );
-    expect(check(page("founded_date", "02/07/2018", "It launched on February 7, 2018")).dropped).toBe(0);
+  it("keeps a date's month and day only when the quote states them, and cuts the rest back to the year (DATE-MONTH)", () => {
+    const LAUNCH = "It launched on February 7, 2018";
+    const valueOf = (value: string, quote: string, text = DARCY) => {
+      const r = verifyFindings([page("founded_date", value, quote)], text);
+      return r.kept[0]?.value ?? r.reasons[0];
+    };
+    // The quote's month and day support the ISO date and one reading of the numeric one.
+    expect(valueOf("2018-02-07", LAUNCH)).toBe("2018-02-07");
+    expect(valueOf("02/07/2018", LAUNCH)).toBe("02/07/2018");
+    expect(valueOf("07/02/2018", LAUNCH)).toBe("07/02/2018");
+    // A month the quote does not state is not kept; the year is.
+    expect(valueOf("2018-03-07", LAUNCH)).toBe("2018");
+    expect(valueOf("03/07/2018", LAUNCH)).toBe("2018");
+    expect(valueOf("12/07/2018", LAUNCH)).toBe("2018");
+    // The right month with the wrong day keeps the month.
+    expect(valueOf("2018-02-09", LAUNCH)).toBe("2018-02");
+    // "The spring of 2018" names no month, so neither an ISO month nor a month name survives.
+    const spring = "We opened our doors in the spring of 2018 with two therapists.";
+    expect(valueOf("2018-03", "in the spring of 2018", spring)).toBe("2018");
+    expect(valueOf("May 2018", "in the spring of 2018", spring)).toBe("2018");
+    expect(valueOf("2018", "in the spring of 2018", spring)).toBe("2018");
+    // A month the quote does name is kept, written either way.
+    const march = "We opened our doors in March 2018 with two therapists.";
+    expect(valueOf("2018-03", "in March 2018", march)).toBe("2018-03");
+    expect(valueOf("March 2018", "in March 2018", march)).toBe("March 2018");
+    // A year the quote does not give is still dropped.
+    expect(valueOf("2019", "in March 2018", march)).toBe("founded_date: the year 2019 is not in the quote");
   });
 
   it("drops an invented name and keeps a paraphrase that uses the page's words", () => {
@@ -312,5 +331,200 @@ describe("keys the model words itself", () => {
       page,
     );
     expect(r.dropped).toEqual([]);
+  });
+});
+
+/** Lines of the cleaned text of examples/darcy-bailey-about-page.html, verbatim. */
+const DARCY_PAGE = [
+  "### EMDR therapy",
+  "Eye Movement Desensitization and Reprocessing for trauma, PTSD, phobias, and experiences that are over but still running. Six therapists on the team are trained in EMDR, including EMDRIA-trained clinicians. EMDR is available in person and virtually.",
+  "Fourteen therapists cover children, teens, adults, couples, and families, with Spanish-speaking sessions available.",
+  "Fees are $170 per session, or $175 with a senior therapist.",
+  "It won the Canadian Choice Award in 2024 (Mental Health Services, Langley) and again in 2025, the Langley Advance Times Readers' Choice Best of the Best award in 2024 and Best in Langley in 2025, and a Three Best Rated award for marriage counselling in Langley in 2024.",
+  "### Darcy Bailey, MSW, RSW, RCC, DipAT, Founder, Owner, and Clinical Director",
+  "- Swetha Ranasuriya, MA, DVATI, RCC, RCAT. Children 5+, teens, adults, and families. EMDR and art therapy.",
+  "- Pal Manhas, M.Ed, RCC, CCPT. Teens, adults, couples, and families. Gottman Method Levels 1 to 3, certified sex therapy informed practice, EMDR.",
+  "Practice on Facebook and Instagram. [add links: LinkedIn, YouTube, Google Business Profile]",
+  "Sessions are 50 minutes, with 75-minute sessions available for a higher fee. In-person sessions are at #315, 20385 64 Avenue, Langley, with free parking. Virtual sessions are by secure video anywhere in British Columbia. A credit card is required to book and is charged on the day of the session. You receive an official receipt to submit to your extended health plan; the practice does not bill insurers directly. Cancellations need 48 hours' notice or the full fee is charged, with one late cancellation for illness allowed every 90 days at no charge.",
+  "Type | Privately owned counselling and psychotherapy practice. Registered Clinical Counsellors and Registered Social Workers; no psychologists or psychiatrists on staff",
+  "Pricing | Free 15-minute consultation. Individual counselling $170 per 50-minute session. Senior therapist $175.",
+  "Website | darcybaileycounselling.com",
+  "### Is counselling covered by MSP or extended health benefits?",
+  "BC MSP does not cover private counselling.",
+  "No. The therapists are Registered Clinical Counsellors and Registered Social Workers, who provide therapy but not formal diagnoses or psychological testing. If you need an assessment or diagnosis, a registered psychologist is the right referral.",
+].join("\n");
+
+const SWETHA = "Swetha Ranasuriya, MA, DVATI, RCC, RCAT. Children 5+, teens, adults, and families. EMDR and art therapy.";
+const DARCY_HEADING = "Darcy Bailey, MSW, RSW, RCC, DipAT, Founder, Owner, and Clinical Director";
+const FOURTEEN = "Fourteen therapists cover children, teens, adults, couples, and families, with Spanish-speaking sessions available.";
+const EMDR = "Eye Movement Desensitization and Reprocessing for trauma, PTSD, phobias, and experiences that are over but still running.";
+const CARD = "A credit card is required to book and is charged on the day of the session.";
+
+function item(fieldId: string, value: Record<string, string>, quote: string, text = DARCY_PAGE, url = "https://darcybaileycounselling.com/about-us/") {
+  const r = verifyFindings([{ fieldId, value: [value], quote, url, source: "page", confidence: 0.9 }], text);
+  return { kept: Array.isArray(r.kept[0]?.value) ? r.kept[0].value[0] : null, reason: r.reasons[0] ?? null };
+}
+
+describe("list item keys besides the identity (EXT2-ITEMS)", () => {
+  it("leaves out credentials the page does not give and specialties whose words it does not use", () => {
+    const r = item(
+      "team_members",
+      { name: "Swetha Ranasuriya", role: "Registered Psychologist", credentials: "PhD, CPsych", specialties: "Neuropsychological testing" },
+      SWETHA,
+    );
+    // The role's words are on this page ("a registered psychologist is the right referral"),
+    // so a word check cannot tell it from an honest role; the invented codes and specialty go.
+    expect(r.kept).toEqual({ name: "Swetha Ranasuriya", role: "Registered Psychologist" });
+
+    const honest = { name: "Swetha Ranasuriya", role: "Registered Clinical Counsellor", credentials: "MA, DVATI, RCC, RCAT", specialties: "Children 5+, teens, adults, and families. EMDR and art therapy." };
+    expect(item("team_members", honest, SWETHA).kept).toEqual(honest);
+    // Codes match with or without their periods.
+    expect(item("team_members", { name: "Pal Manhas", role: "Registered Clinical Counsellor", credentials: "MEd, RCC, CCPT" }, "Pal Manhas, M.Ed, RCC, CCPT.").kept?.credentials).toBe("MEd, RCC, CCPT");
+  });
+
+  it("checks a founder's title and credentials, and drops the founder when the required title is not supported", () => {
+    const r = item("founders", { name: "Darcy Bailey", title: "Founder, Owner, and Clinical Director", credentials: "PhD, RPsych" }, DARCY_HEADING);
+    expect(r.kept).toEqual({ name: "Darcy Bailey", title: "Founder, Owner, and Clinical Director" });
+    expect(item("founders", { name: "Darcy Bailey", title: "Founder", credentials: "MSW, RSW, RCC, DipAT" }, DARCY_HEADING).kept?.credentials).toBe("MSW, RSW, RCC, DipAT");
+    expect(item("founders", { name: "Darcy Bailey", title: "Chief Medical Officer" }, DARCY_HEADING).reason).toBe(
+      "founders: title: only 0 of 3 words are on the page",
+    );
+  });
+
+  it("counts a role that spells out a code in the quote as on the page", () => {
+    // "Registered Clinical Counsellor" is what RCC stands for; this page never writes it out.
+    const page = "Swetha Ranasuriya, MA, DVATI, RCC, RCAT. Children 5+, teens, adults, and families.";
+    expect(item("team_members", { name: "Swetha Ranasuriya", role: "Registered Clinical Counsellor" }, page, page).kept?.role).toBe(
+      "Registered Clinical Counsellor",
+    );
+    expect(item("team_members", { name: "Swetha Ranasuriya", role: "Registered Dietitian" }, page, page).reason).toBe(
+      "team_members: role: only 0 of 2 words are on the page",
+    );
+  });
+
+  it("leaves out an issuer and notes the page does not state", () => {
+    const awards = "It won the Canadian Choice Award in 2024 (Mental Health Services, Langley) and again in 2025";
+    expect(item("awards", { name: "Canadian Choice Award", issuer: "Better Business Bureau", year: "2024" }, awards).kept).toEqual({
+      name: "Canadian Choice Award",
+      year: "2024",
+    });
+    expect(item("awards", { name: "Canadian Choice Award", issuer: "Canadian Choice Awards" }, awards).kept?.issuer).toBe("Canadian Choice Awards");
+    const fees = "Fees are $170 per session, or $175 with a senior therapist.";
+    expect(item("pricing", { name: "Individual counselling", price: "$170", notes: "GST included, covered by MSP" }, fees).kept).toEqual({
+      name: "Individual counselling",
+      price: "$170",
+    });
+    expect(item("pricing", { name: "Individual counselling", price: "$170", notes: "or $175 with a senior therapist" }, fees).kept?.notes).toBe(
+      "or $175 with a senior therapist",
+    );
+  });
+
+  it("reads a price from its quote, not from anywhere on the page", () => {
+    // "free" is on the page (free parking, a free consultation) but not in what the EMDR quote says.
+    expect(item("services", { name: "EMDR therapy", description: EMDR, price: "Free" }, EMDR).kept).toEqual({ name: "EMDR therapy", description: EMDR });
+    expect(item("pricing", { name: "EMDR therapy", price: "Free" }, EMDR).reason).toBe("pricing: price: only 0 of 1 words are in the quote");
+    expect(item("pricing", { name: "Consultation", price: "Free" }, "Free 15-minute consultation.").kept?.price).toBe("Free");
+  });
+
+  it("needs a word of a short segment or claim in the quote or on the page", () => {
+    expect(item("customer_segments", { segment: "Veterans" }, FOURTEEN).reason).toBe(
+      "customer_segments: segment: none of its words are in the quote or on the page",
+    );
+    expect(item("differentiators", { claim: "Fully insured" }, FOURTEEN).reason).toBe(
+      "differentiators: claim: none of its words are in the quote or on the page",
+    );
+    expect(item("track_record", { claim: "Industry leader" }, FOURTEEN).reason).toBe(
+      "track_record: claim: none of its words are in the quote or on the page",
+    );
+    expect(item("customer_segments", { segment: "Couples" }, FOURTEEN).kept).toEqual({ segment: "Couples" });
+    expect(item("differentiators", { claim: "Spanish-speaking sessions" }, FOURTEEN).kept).toEqual({ claim: "Spanish-speaking sessions" });
+  });
+
+  it("keeps a policy heading in the model's words only over a quote about the policy", () => {
+    const cancellation = "Cancellations need 48 hours' notice or the full fee is charged, with one late cancellation for illness allowed every 90 days at no charge.";
+    expect(item("policies", { name: "Sliding scale", detail: cancellation }, FOURTEEN).reason).toBe("policies: name: the quote is not about this item");
+    const topical = "Sessions are 50 minutes, with 75-minute sessions available for a higher fee.";
+    expect(item("policies", { name: "Sliding scale", detail: topical }, FOURTEEN).reason).toBe("policies: name: the quote is not about this item");
+    expect(item("policies", { name: "Payment", detail: CARD }, CARD).kept).toEqual({ name: "Payment", detail: CARD });
+    expect(item("policies", { name: "Cancellation", detail: cancellation }, cancellation).kept).toEqual({ name: "Cancellation", detail: cancellation });
+    // A long quote that holds the policy among other sentences is still about it.
+    const paragraph =
+      "Virtual sessions are by secure video anywhere in British Columbia. A credit card is required to book and is charged on the day of the session. You receive an official receipt to submit to your extended health plan; the practice does not bill insurers directly.";
+    expect(item("policies", { name: "Payment", detail: CARD }, paragraph).kept).toEqual({ name: "Payment", detail: CARD });
+  });
+
+  it("leaves out a person's link the page does not show, and keeps the page's own address", () => {
+    const profile = "https://darcybaileycounselling.com/darcy-bailey/";
+    const r = item("founders", { name: "Darcy Bailey", title: "Founder", url: profile, linkedin: "https://www.linkedin.com/in/darcybailey" }, DARCY_HEADING, DARCY_PAGE, profile);
+    expect(r.kept).toEqual({ name: "Darcy Bailey", title: "Founder", url: profile });
+    // Read from another page, the profile address is not on this one.
+    expect(item("founders", { name: "Darcy Bailey", title: "Founder", url: profile }, DARCY_HEADING).kept).toEqual({ name: "Darcy Bailey", title: "Founder" });
+  });
+});
+
+describe("social links and handles (EXT2-HANDLE)", () => {
+  const LEGIIT_SOCIAL = "Social | Legiit: YouTube, LinkedIn, X, Facebook. Chris M. Walker: YouTube, Instagram @cmwlegiit, LinkedIn, X, Facebook, chrismwalker.io";
+  const social = (url: string, quote: string, text: string) => item("social_profiles", { platform: platformOf(url), url }, quote, text);
+  const platformOf = (url: string) => new URL(url).hostname.replace(/^www\./, "").split(".")[0];
+
+  it("does not take a handle built from the business's domain or name", () => {
+    expect(social("https://www.facebook.com/darcybaileycounselling", "Practice on Facebook and Instagram.", DARCY_PAGE).reason).toBe(
+      "social_profiles: url: the link is not on the page",
+    );
+    expect(social("https://www.facebook.com/legiit", "Legiit: YouTube, LinkedIn, X, Facebook", LEGIIT_SOCIAL).reason).toBe(
+      "social_profiles: url: the link is not on the page",
+    );
+    expect(social("https://www.linkedin.com/in/chris", "Chris M. Walker: YouTube, Instagram @cmwlegiit, LinkedIn, X, Facebook", LEGIIT_SOCIAL).reason).toBe(
+      "social_profiles: url: the link is not on the page",
+    );
+  });
+
+  it("takes a handle the quote shows as a handle, and an address the page shows in full", () => {
+    expect(social("https://www.instagram.com/cmwlegiit/", "Instagram @cmwlegiit", LEGIIT_SOCIAL).kept?.url).toBe("https://www.instagram.com/cmwlegiit/");
+    const page = `${LEGIIT_SOCIAL}\nWatch us at youtube.com/@LegiitOfficial and facebook.com/legiitofficial.`;
+    expect(social("https://www.youtube.com/@LegiitOfficial", "YouTube", page).kept).not.toBeNull();
+    expect(social("https://www.facebook.com/legiitofficial", "Facebook", page).kept).not.toBeNull();
+    // A shorter address is not shown by a longer one that starts with it.
+    expect(social("https://www.facebook.com/legiit", "Facebook", page).reason).toBe("social_profiles: url: the link is not on the page");
+  });
+
+  it("leaves a guessed profile out of a person and keeps the one the quote shows", () => {
+    const r = item(
+      "founders",
+      { name: "Chris M. Walker", title: "Founder", instagram: "https://www.instagram.com/cmwlegiit", linkedin: "https://www.linkedin.com/in/chris" },
+      "Chris M. Walker: YouTube, Instagram @cmwlegiit, LinkedIn, X, Facebook, chrismwalker.io",
+      `${LEGIIT_SOCIAL}\nChris M. Walker, Founder and CEO`,
+    );
+    expect(r.kept).toEqual({ name: "Chris M. Walker", title: "Founder", instagram: "https://www.instagram.com/cmwlegiit" });
+  });
+});
+
+describe("opening hours (HOURS-DROP)", () => {
+  const hours = (value: Record<string, string>, quote: string) => item("hours", value, quote, quote);
+
+  it("reads abbreviated days and 24-hour times as the days and times they are", () => {
+    for (const [value, quote] of [
+      [{ days: "Monday to Thursday", opens: "9 AM", closes: "8 PM" }, "Mon - Thu: 9am - 8pm"],
+      [{ days: "Mon - Thu", opens: "9am", closes: "8pm" }, "Mon - Thu: 9am - 8pm"],
+      [{ days: "Monday to Friday", opens: "9:00 AM", closes: "5:00 PM" }, "Mon-Fri 09:00-17:00"],
+      [{ days: "Monday to Friday", opens: "8 AM", closes: "5 PM" }, "Weekdays 8am to 5pm"],
+      [{ days: "Monday", opens: "9:00 AM", closes: "5:00 PM" }, "Mon-Fri 9-5pm"],
+      [{ days: "Sunday", opens: "Closed", closes: "Closed" }, "Sunday: closed"],
+    ] as const) {
+      expect(hours(value, quote)).toEqual({ kept: value, reason: null });
+    }
+  });
+
+  it("still drops a day or a time the quote does not give", () => {
+    expect(hours({ days: "Monday to Saturday", opens: "9 AM", closes: "5 PM" }, "Mon-Fri 9am-5pm").reason).toBe(
+      "hours: days: Saturday is not in the quote",
+    );
+    expect(hours({ days: "Monday to Thursday", opens: "9 AM", closes: "6 PM" }, "Mon - Thu: 9am - 8pm").reason).toBe(
+      "hours: closes: 6 PM is not in the quote",
+    );
+    // 8 is in the quote, but as 8 in the evening.
+    expect(hours({ days: "Monday to Thursday", opens: "8 AM", closes: "8 PM" }, "Mon - Thu: 9am - 8pm").reason).toBe(
+      "hours: opens: 8 AM is not in the quote",
+    );
   });
 });

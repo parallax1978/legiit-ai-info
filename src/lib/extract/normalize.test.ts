@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  clockReadings,
+  clockTimesIn,
+  datesIn,
+  dayKey,
+  daysNamed,
+  givenNamesCompatible,
   levenshtein,
   normalizeDate,
   normalizeForCompare,
@@ -9,7 +15,99 @@ import {
   personNameKey,
   platformFromUrl,
   samePerson,
+  timeKey,
 } from "./normalize";
+
+describe("datesIn", () => {
+  it("reads named months with their days, ISO dates, and both readings of a numeric date", () => {
+    expect(datesIn("It launched on February 7, 2018")).toEqual([{ month: 2, day: 7 }]);
+    expect(datesIn("On the 18th of May, 2016 he resigned")).toEqual([{ month: 5, day: 18 }]);
+    expect(datesIn("Open since Feb. 2018")).toEqual([{ month: 2, day: null }]);
+    expect(datesIn("2018-02-07")).toEqual([{ month: 2, day: 7 }]);
+    expect(datesIn("03/07/2018")).toEqual([
+      { month: 3, day: 7 },
+      { month: 7, day: 3 },
+    ]);
+    expect(datesIn("13/07/2018")).toEqual([{ month: 7, day: 13 }]);
+  });
+
+  it("finds no month in a bare year, a season, or a month word with no number next to it", () => {
+    expect(datesIn("since 2018")).toEqual([]);
+    expect(datesIn("in the spring of 2018")).toEqual([]);
+    expect(datesIn("you may book online")).toEqual([]);
+    expect(datesIn("Call 604-533-9163")).toEqual([]);
+  });
+});
+
+describe("daysNamed and dayKey", () => {
+  it("expands runs and groups of days the way pages write them", () => {
+    const set = (s: string) => [...daysNamed(s)].sort();
+    expect(set("Mon - Thu: 9am - 8pm")).toEqual([0, 1, 2, 3]);
+    expect(set("Monday to Thursday")).toEqual([0, 1, 2, 3]);
+    expect(set("Mon-Fri 09:00-17:00")).toEqual([0, 1, 2, 3, 4]);
+    expect(set("Monday through Friday")).toEqual([0, 1, 2, 3, 4]);
+    expect(set("Weekdays 8am to 5pm")).toEqual([0, 1, 2, 3, 4]);
+    expect(set("Tues, Thurs & Sat")).toEqual([1, 3, 5]);
+    expect(set("Weekends")).toEqual([5, 6]);
+    expect(set("Open daily")).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(set("Fri - Mon")).toEqual([0, 4, 5, 6]);
+    expect(set("Public holidays")).toEqual([]);
+    // Words that only start like a day are not days.
+    expect(set("monthly, satisfaction, sundry")).toEqual([]);
+  });
+
+  it("gives one key to one set of days however it is written", () => {
+    expect(dayKey("Mon - Thu")).toBe(dayKey("Monday to Thursday"));
+    expect(dayKey("Weekdays")).toBe(dayKey("Monday to Friday"));
+    expect(dayKey("Monday")).not.toBe(dayKey("Monday to Thursday"));
+    expect(dayKey("Monday to Thursday (admin office)")).not.toBe(dayKey("Monday to Thursday"));
+    expect(dayKey("Public holidays")).toBe("");
+  });
+});
+
+describe("clock times", () => {
+  it("reads a time value in minutes, with both readings when it has no am or pm", () => {
+    expect(clockReadings("5:00 PM")).toEqual([1020]);
+    expect(clockReadings("5 pm")).toEqual([1020]);
+    expect(clockReadings("17:00")).toEqual([1020]);
+    expect(clockReadings("9:00 a.m.")).toEqual([540]);
+    expect(clockReadings("12 PM")).toEqual([720]);
+    expect(clockReadings("12 AM")).toEqual([0]);
+    expect(clockReadings("noon")).toEqual([720]);
+    expect(clockReadings("9")).toEqual([540, 1260]);
+    expect(clockReadings("Closed")).toBeNull();
+    expect(clockReadings("13 PM")).toBeNull();
+  });
+
+  it("reads the times a text states, not prices, counts, or street numbers", () => {
+    expect([...clockTimesIn("Mon - Thu: 9am - 8pm")].sort((a, b) => a - b)).toEqual([540, 1200]);
+    expect([...clockTimesIn("Mon-Fri 09:00-17:00")].sort((a, b) => a - b)).toEqual([540, 1020, 1260]);
+    expect([...clockTimesIn("Weekdays 9-5pm")].sort((a, b) => a - b)).toEqual([540, 1020, 1260]);
+    expect([...clockTimesIn("Mon-Fri 9.30am - 5.30pm")].sort((a, b) => a - b)).toEqual([570, 1050]);
+    expect(clockReadings("5.30 pm")).toEqual([1050]);
+    expect([...clockTimesIn("Fees are $170 at #315, 20385 64 Avenue")]).toEqual([]);
+  });
+
+  it("gives one key to one time however it is written", () => {
+    expect(timeKey("9 AM")).toBe(timeKey("9:00 AM"));
+    expect(timeKey("09:00")).toBe(timeKey("9am"));
+    expect(timeKey("17:00")).toBe(timeKey("5:00 PM"));
+    expect(timeKey("5 PM")).not.toBe(timeKey("5 AM"));
+    // A bare hour could be either half of the day, so it has no time key.
+    expect(timeKey("9")).toBe("");
+  });
+});
+
+describe("givenNamesCompatible", () => {
+  it("accepts the same given name, an initial, or a short form, and nothing else", () => {
+    expect(givenNamesCompatible("jim", "jim")).toBe(true);
+    expect(givenNamesCompatible("j", "jim")).toBe(true);
+    expect(givenNamesCompatible("pal", "palvinder")).toBe(true);
+    expect(givenNamesCompatible("mark", "mary")).toBe(false);
+    expect(givenNamesCompatible("djordje", "marija")).toBe(false);
+    expect(givenNamesCompatible("", "jim")).toBe(false);
+  });
+});
 
 describe("normalizePhone", () => {
   it("keeps digits only and drops the leading 1 of an 11-digit North American number", () => {

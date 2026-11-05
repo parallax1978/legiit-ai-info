@@ -98,6 +98,161 @@ export function yearOf(s: string): string | null {
   return m ? m[1] : null;
 }
 
+const MONTH_NUMBERS: Record<string, number> = {
+  january: 1, jan: 1, february: 2, feb: 2, march: 3, mar: 3, april: 4, apr: 4, may: 5,
+  june: 6, jun: 6, july: 7, jul: 7, august: 8, aug: 8, september: 9, sept: 9, sep: 9,
+  october: 10, oct: 10, november: 11, nov: 11, december: 12, dec: 12,
+};
+const MONTH = `(${Object.keys(MONTH_NUMBERS).join("|")})`;
+const ORDINAL = "(?:st|nd|rd|th)?";
+/** A month name next to a number, so "you may book" is not May. */
+const NAMED_DATES = [
+  // "February 7", "Feb. 7th"
+  { re: new RegExp(`\\b${MONTH}\\b\\.?\\s*(\\d{1,2})${ORDINAL}\\b(?![\\d:])`, "g"), month: 1, day: 2 },
+  // "7 February", "7th of Feb"
+  { re: new RegExp(`\\b(\\d{1,2})${ORDINAL}\\s+(?:of\\s+)?${MONTH}\\b`, "g"), month: 2, day: 1 },
+  // "February 2018", "Feb, 2018", "March of 2018"
+  { re: new RegExp(`\\b${MONTH}\\b\\.?,?\\s*(?:of\\s+)?\\d{4}\\b`, "g"), month: 1, day: 0 },
+];
+
+export interface DatePart {
+  month: number;
+  day: number | null;
+}
+
+function datePart(month: number, day: number | null): DatePart | null {
+  if (!(month >= 1 && month <= 12)) return null;
+  if (day !== null && !(day >= 1 && day <= 31)) return null;
+  return { month, day };
+}
+
+/**
+ * The months, with their days, that a text states: "February 7, 2018",
+ * "7 Feb", "February 2018" (no day), "2018-02-07", and both readings of a
+ * numeric date ("03/07/2018" is March 7 or July 3). A bare year states none.
+ */
+export function datesIn(text: string): DatePart[] {
+  const s = straightenText(text).toLowerCase();
+  const out: DatePart[] = [];
+  const push = (p: DatePart | null) => {
+    if (!p || out.some((o) => o.month === p.month && (o.day === p.day || p.day === null))) return;
+    out.push(p);
+  };
+  for (const m of s.matchAll(/\b\d{4}-(\d{1,2})(?:-(\d{1,2}))?\b/g)) push(datePart(Number(m[1]), m[2] ? Number(m[2]) : null));
+  for (const m of s.matchAll(/\b(\d{1,2})[/.-](\d{1,2})[/.-](?:\d{4}|\d{2})\b/g)) {
+    push(datePart(Number(m[1]), Number(m[2])));
+    push(datePart(Number(m[2]), Number(m[1])));
+  }
+  for (const { re, month, day } of NAMED_DATES) {
+    for (const m of s.matchAll(re)) push(datePart(MONTH_NUMBERS[m[month]] ?? 0, day ? Number(m[day]) : null));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Opening hours: days of the week and clock times
+// ---------------------------------------------------------------------------
+
+const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+/** A day, a group of days, or every day, as pages write them: "Mon", "Thurs", "Weekdays", "daily", "7 days a week". */
+const DAY_WORD =
+  /\b(?:(mon(?:day)?|tue(?:s(?:day)?)?|wed(?:s|nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(weekdays?)|(weekends?)|(daily|everyday|every day|all week|(?:7|seven) days(?: a week)?))\b\.?/g;
+/** What joins the two ends of a run of days: "Mon - Thu", "Monday to Thursday", "Monday through Friday". */
+const DAY_RANGE = /^\s*(?:-|to|through|thru|till|until)\s*$/;
+/** What else a days value may say around its days without saying anything more. */
+const DAY_JOINERS = /\b(?:to|through|thru|till|until|and|from|or)\b|[-&,/:;+]/g;
+
+/** The days of the week a text names, Monday 0 to Sunday 6, with runs and groups expanded ("Mon - Thu", "weekdays"). */
+export function daysNamed(text: string): Set<number> {
+  const s = straightenText(text).toLowerCase();
+  const out = new Set<number>();
+  let prev: { day: number; end: number } | null = null;
+  for (const m of s.matchAll(DAY_WORD)) {
+    const at = m.index ?? 0;
+    if (m[1]) {
+      const day = WEEKDAYS.findIndex((d) => d.startsWith(m[1].slice(0, 3)));
+      if (prev && DAY_RANGE.test(s.slice(prev.end, at))) {
+        for (let d: number = prev.day; d !== day; d = (d + 1) % 7) out.add(d);
+      }
+      out.add(day);
+      prev = { day, end: at + m[0].length };
+      continue;
+    }
+    const group = m[2] ? [0, 1, 2, 3, 4] : m[3] ? [5, 6] : [0, 1, 2, 3, 4, 5, 6];
+    for (const d of group) out.add(d);
+    prev = null;
+  }
+  return out;
+}
+
+/** What a days value says besides its days ("Monday to Thursday, admin office" leaves "admin office"). */
+export function besidesDays(text: string): string {
+  return straightenText(text).toLowerCase().replace(DAY_WORD, " ").replace(DAY_JOINERS, " ").replace(/\s+/g, " ").trim();
+}
+
+export function dayName(day: number): string {
+  const name = WEEKDAYS[day] ?? "";
+  return name ? `${name[0].toUpperCase()}${name.slice(1)}` : "";
+}
+
+/** Comparison key for a days value: the days as a set, then anything else it says. "Mon - Thu" and "Monday to Thursday" share one. */
+export function dayKey(value: string): string {
+  const days = daysNamed(value);
+  if (!days.size) return "";
+  const rest = besidesDays(value);
+  return `days:${[...days].sort().join("")}${rest ? ` ${rest}` : ""}`;
+}
+
+/** Minutes after midnight for an hour and minute, both readings when no am or pm says which half of the day. */
+function clockReadingsOf(hour: number, minute: number, meridiem: string | undefined, colon: boolean): number[] {
+  if (minute > 59) return [];
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return [];
+    return [((hour % 12) + (meridiem === "p" ? 12 : 0)) * 60 + minute];
+  }
+  if (hour > 23 || (!colon && (hour < 1 || hour > 12))) return [];
+  const asWritten = hour * 60 + minute;
+  return hour >= 1 && hour < 12 ? [asWritten, asWritten + 720] : [asWritten];
+}
+
+const CLOCK = /(?<![\d:.$])(\d{1,2})(?:[:.](\d{2}))?\s*(?:([ap])\.?\s?m\b\.?)?(?![\d:])/g;
+
+/**
+ * The clock times a text states, in minutes after midnight: "9am", "9:00 AM",
+ * "9.30am", "17:00", "noon". A time with no am or pm ("9:00", or the 9 and 5
+ * of "9-5") counts as both readings.
+ */
+export function clockTimesIn(text: string): Set<number> {
+  const s = straightenText(text).toLowerCase();
+  const out = new Set<number>();
+  for (const m of s.matchAll(CLOCK)) {
+    for (const t of clockReadingsOf(Number(m[1]), m[2] ? Number(m[2]) : 0, m[3], m[2] !== undefined)) out.add(t);
+  }
+  if (/\bnoon\b/.test(s)) out.add(720);
+  if (/\bmidnight\b/.test(s)) out.add(0);
+  return out;
+}
+
+/** The readings of a time value in minutes after midnight ("5 PM" is 1020), or null when it is not a clock time ("Closed"). */
+export function clockReadings(value: string): number[] | null {
+  const s = straightenText(value).toLowerCase();
+  if (/^(?:12\s*)?noon$/.test(s)) return [720];
+  if (/^(?:12\s*)?midnight$/.test(s)) return [0];
+  const m = s.match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(?:([ap])\.?\s?m\.?)?$/);
+  if (!m) return null;
+  const readings = clockReadingsOf(Number(m[1]), m[2] ? Number(m[2]) : 0, m[3], m[2] !== undefined);
+  return readings.length ? readings : null;
+}
+
+/** Comparison key for a time value: its minutes when it names one time ("9 AM", "9:00 AM", and "09:00" share one), else its text. */
+export function timeKey(value: string): string {
+  const readings = clockReadings(value);
+  if (!readings) return "";
+  // "9:00" is read as written, as a 24-hour time; a bare "9" could be either.
+  return readings.length === 1 || value.includes(":") ? `time:${readings[0]}` : "";
+}
+
 export function normalizeNumber(s: string): string {
   return s.replace(/[^\d.]+/g, "");
 }
@@ -290,6 +445,17 @@ export function middleNameDropped(a: string[], b: string[]): boolean {
   if (a.length < 2 || b.length < 2 || a.length === b.length) return false;
   const [shorter, longer] = a.length < b.length ? [a, b] : [b, a];
   return shorter.length === 2 && shorter[0] === longer[0] && shorter[1] === longer[longer.length - 1];
+}
+
+/**
+ * True when two given names (first name-key tokens) can be one person's:
+ * equal, or one is an initial or short form that begins the other ("j" /
+ * "jim", "pal" / "palvinder"). Mark and Mary, Djordje and Marija are not.
+ */
+export function givenNamesCompatible(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return long.startsWith(short);
 }
 
 /**

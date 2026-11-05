@@ -11,7 +11,8 @@ function describeField(field: TemplateField): string {
     const keys = (field.itemShape ?? []).map((s) => {
       const bits = [s.key];
       if (s.required) bits.push("required");
-      if (s.hint) bits.push(`for example "${s.hint}"`);
+      if (s.extractHint) bits.push(s.extractHint);
+      else if (s.hint) bits.push(`for example "${s.hint}"`);
       return bits.length > 1 ? `${bits[0]} (${bits.slice(1).join("; ")})` : bits[0];
     });
     shape = keys.length ? `list; item keys: ${keys.join(", ")}` : "list";

@@ -18,12 +18,16 @@ import {
 } from "@/lib/facts/types";
 import type { TemplateField, TemplateSpec } from "@/templates/types";
 import {
+  datesIn,
+  dayKey,
+  givenNamesCompatible,
   middleNameDropped,
   normalizeForCompare,
   normalizeItemKey,
   normalizeUrl,
   personNameKey,
   samePerson,
+  timeKey,
 } from "./normalize";
 
 /** Evidence entries kept per list field; the earliest win. */
@@ -92,6 +96,17 @@ function addressParts(a: AddressValue): number {
   return [a.streetAddress, a.addressLocality, a.addressRegion, a.postalCode, a.addressCountry].filter(Boolean).length;
 }
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_MONTH = /^\d{4}-\d{2}$/;
+
+/** True when the finding's own evidence states the month of its ISO date ("February 7, 2018" for 2018-02-07, or the JSON-LD value itself). */
+function monthInEvidence(f: Finding): boolean {
+  const value = typeof f.value === "string" ? f.value.trim() : "";
+  if (!ISO_DAY.test(value) && !ISO_MONTH.test(value)) return false;
+  const month = Number(value.slice(5, 7));
+  return datesIn(f.quote).some((d) => d.month === month);
+}
+
 /** The most complete raw value in a group of findings that agree. */
 function bestValue(field: TemplateField, findings: Finding[]): FactValue {
   if (field.type === "address") {
@@ -112,9 +127,13 @@ function bestValue(field: TemplateField, findings: Finding[]): FactValue {
   const strings = findings.map((f) => f.value).filter((v): v is string => typeof v === "string" && v.length > 0);
   if (!strings.length) return null;
   if (field.type === "date") {
-    const iso =
-      strings.find((v) => /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) ?? strings.find((v) => /^\d{4}-\d{2}$/.test(v.trim()));
-    if (iso) return iso.trim();
+    // A full date outranks a bare year only when its own evidence states its month:
+    // "2018-03" read from "the spring of 2018" does not beat "2018".
+    const dated = findings.filter(monthInEvidence).map((f) => (f.value as string).trim());
+    const iso = dated.find((v) => ISO_DAY.test(v)) ?? dated.find((v) => ISO_MONTH.test(v));
+    if (iso) return iso;
+    const year = strings.find((v) => /^\d{4}$/.test(v.trim()));
+    if (year) return year.trim();
   }
   return mostCommon(strings);
 }
@@ -234,15 +253,17 @@ function linkKeysOf(field: TemplateField): string[] {
 
 /**
  * The profile links of one variant, apart from a link to the page the variant
- * was read from (ownPage), which a model fills in for everyone on a team page.
+ * was read from (ownPage), which a model fills in for everyone on a team page,
+ * and apart from list pages: pages whose text gave more than one name. A team
+ * page given as each person's url is where they are listed, not who they are.
  */
-function linksOf(field: TemplateField, v: Variant): { links: Set<string>; ownPage: string | null } {
+function linksOf(field: TemplateField, v: Variant, listPages: Set<string>): { links: Set<string>; ownPage: string | null } {
   const page = normalizeUrl(v.from.url);
   const links = new Set<string>();
   let ownPage: string | null = null;
   for (const key of linkKeysOf(field)) {
     const link = normalizeUrl(v.item[key] ?? "");
-    if (!link) continue;
+    if (!link || listPages.has(link)) continue;
     if (link === page) ownPage = page;
     else links.add(link);
   }
@@ -255,9 +276,9 @@ function linksOf(field: TemplateField, v: Variant): { links: Set<string>; ownPag
  * but a variant read from a profile page that gives that page as its own does
  * match a variant elsewhere that links to it.
  */
-function shareProfileLink(field: TemplateField, a: Variant, b: Variant): boolean {
-  const la = linksOf(field, a);
-  const lb = linksOf(field, b);
+function shareProfileLink(field: TemplateField, a: Variant, b: Variant, listPages: Set<string>): boolean {
+  const la = linksOf(field, a, listPages);
+  const lb = linksOf(field, b, listPages);
   for (const link of la.links) if (lb.links.has(link)) return true;
   return (lb.ownPage !== null && la.links.has(lb.ownPage)) || (la.ownPage !== null && lb.links.has(la.ownPage));
 }
@@ -269,18 +290,21 @@ function samePage(a: Variant, b: Variant): boolean {
 
 /**
  * Whether a person variant is the person a merged item already describes.
+ * - Two different full names one source read from one page (its text, or its
+ *   JSON-LD) are two people: a team page and an employee list name each
+ *   person once. One that only leaves out the other's middle name or initial
+ *   is the exception. This is checked first, so an exact match elsewhere in
+ *   the item cannot pull a second person into it.
  * - The same name key is the same person.
- * - Two different full names the extractor read from one page's text are two
- *   people (a team page lists each person once), unless one only leaves out
- *   the other's middle name or initial.
  * - Names a typo apart, or with a middle name left out, are the same person.
  * - A single name that is part of a full name ("Jim" / "Jim Sabellico") is the
  *   same person when the two share a profile link or a page.
  * - Two full names that share a profile link are the same person only when
- *   they also share a name ("Pal Manhas" / "Palvinder Manhas-Bains"); a shared
- *   link alone never joins two different people.
+ *   they share a name part and their given names fit (equal, or one an initial
+ *   or short form of the other: "Pal Manhas" / "Palvinder Manhas-Bains"). A
+ *   shared surname is not a shared name: Mark and Mary Bailey stay two people.
  */
-function samePersonItem(field: TemplateField, target: MergedItem, v: Variant): boolean {
+function samePersonItem(field: TemplateField, target: MergedItem, v: Variant, listPages: Set<string>): boolean {
   const key = dedupeKeyOf(field);
   const nameKey = personNameKey(v.item[key] ?? "");
   if (!nameKey) return false;
@@ -288,32 +312,41 @@ function samePersonItem(field: TemplateField, target: MergedItem, v: Variant): b
   const known = target.variants
     .map((x) => ({ x, nameKey: personNameKey(x.item[key] ?? "") }))
     .filter((k) => k.nameKey.length > 0);
-  if (known.some((k) => k.nameKey === nameKey)) return true;
 
-  if (tokens.length >= 2 && v.from.source === "page") {
+  if (tokens.length >= 2 && (v.from.source === "page" || v.from.source === "jsonld")) {
     for (const k of known) {
       const other = k.nameKey.split(" ");
-      if (k.x.from.source !== "page" || !samePage(k.x, v) || other.length < 2) continue;
+      if (k.nameKey === nameKey || other.length < 2) continue;
+      if (k.x.from.source !== v.from.source || !samePage(k.x, v)) continue;
       if (!middleNameDropped(other, tokens)) return false;
     }
   }
+  if (known.some((k) => k.nameKey === nameKey)) return true;
 
   for (const k of known) {
     if (samePerson(k.nameKey, nameKey)) return true;
     const other = k.nameKey.split(" ");
     if (!sharesNamePart(other, tokens)) continue;
-    const sharedLink = shareProfileLink(field, k.x, v);
+    const sharedLink = shareProfileLink(field, k.x, v, listPages);
     if (other.length === 1 || tokens.length === 1) {
       if (sharedLink || samePage(k.x, v)) return true;
-    } else if (sharedLink) {
+    } else if (sharedLink && givenNamesCompatible(other[0], tokens[0])) {
       return true;
     }
   }
   return false;
 }
 
-function sameItem(field: TemplateField, target: MergedItem, v: Variant): boolean {
-  if (field.itemKind === "person") return samePersonItem(field, target, v);
+/** The key two items are compared by: days as a set of days, a time in minutes, otherwise the normalized text. */
+function itemKeyFor(field: TemplateField, key: string, value: string | undefined): string {
+  const check = field.itemShape?.find((s) => s.key === key)?.check;
+  if (check === "days") return dayKey(value ?? "") || normalizeItemKey(value);
+  if (check === "time") return timeKey(value ?? "") || normalizeItemKey(value);
+  return normalizeItemKey(value);
+}
+
+function sameItem(field: TemplateField, target: MergedItem, v: Variant, listPages: Set<string>): boolean {
+  if (field.itemKind === "person") return samePersonItem(field, target, v, listPages);
   const key = dedupeKeyOf(field);
   const a = target.item;
   const b = v.item;
@@ -323,8 +356,8 @@ function sameItem(field: TemplateField, target: MergedItem, v: Variant): boolean
     return !!ua && ua === ub;
   }
   if (!key) return false;
-  const ka = normalizeItemKey(a[key]);
-  const kb = normalizeItemKey(b[key]);
+  const ka = itemKeyFor(field, key, a[key]);
+  const kb = itemKeyFor(field, key, b[key]);
   return !!ka && ka === kb;
 }
 
@@ -333,7 +366,29 @@ function compareKey(field: TemplateField, key: string, value: string | undefined
   if (field.itemKind === "person" && key === "name") return personNameKey(value);
   const shape = field.itemShape?.find((s) => s.key === key);
   if (shape?.type === "url") return normalizeUrl(value);
-  return normalizeItemKey(value);
+  return itemKeyFor(field, key, value);
+}
+
+/**
+ * Pages whose text gave more than one name for one person field: team pages,
+ * not anyone's profile. JSON-LD names do not count, because a site can carry
+ * the same employee list on every page, profile pages included.
+ */
+function listPagesOf(field: TemplateField, findings: Finding[]): Set<string> {
+  const names = new Map<string, Set<string>>();
+  const key = dedupeKeyOf(field);
+  for (const f of findings) {
+    const page = normalizeUrl(f.url);
+    if (!page || f.source !== "page") continue;
+    for (const raw of itemsOf(field, f)) {
+      const name = personNameKey(cleanItem(field, raw)?.[key] ?? "");
+      if (!name) continue;
+      const set = names.get(page);
+      if (set) set.add(name);
+      else names.set(page, new Set([name]));
+    }
+  }
+  return new Set([...names].filter(([, set]) => set.size > 1).map(([page]) => page));
 }
 
 function conflictsOf(field: TemplateField, merged: MergedItem): ListItemConflict | null {
@@ -418,9 +473,17 @@ function listNote(merged: MergedItem[]): string | undefined {
   return notes.length ? notes.join("; ") : undefined;
 }
 
+/** True when one of the item's variants has exactly this person's name key. */
+function hasName(field: TemplateField, m: MergedItem, nameKey: string): boolean {
+  const key = dedupeKeyOf(field);
+  return !!nameKey && m.variants.some((x) => personNameKey(x.item[key] ?? "") === nameKey);
+}
+
 function mergeList(field: TemplateField, findings: Finding[]): FactField {
   const merged: MergedItem[] = [];
   const evidence: Evidence[] = [];
+  const person = field.itemKind === "person";
+  const listPages = person ? listPagesOf(field, findings) : new Set<string>();
   let order = 0;
 
   for (const f of findings) {
@@ -433,7 +496,11 @@ function mergeList(field: TemplateField, findings: Finding[]): FactField {
       const from = evidenceOf(f);
       const variant: Variant = { item, evidence: [from], order: order++, from, derived: f.derived === true };
       if (note) variant.note = note;
-      const target = merged.find((m) => sameItem(field, m, variant));
+      // A person goes to the item that already has their exact name before any looser match.
+      const nameKey = person ? personNameKey(item[dedupeKeyOf(field)] ?? "") : "";
+      const target =
+        (person ? merged.find((m) => hasName(field, m, nameKey) && sameItem(field, m, variant, listPages)) : undefined) ??
+        merged.find((m) => sameItem(field, m, variant, listPages));
       if (target) {
         for (const [key, value] of Object.entries(item)) {
           if (!target.item[key] && value) target.item[key] = value;

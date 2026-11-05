@@ -7,8 +7,21 @@
 */
 import type { AddressValue, FactValue, Finding, ListItem } from "@/lib/facts/types";
 import { ABOUT_V1 } from "@/templates/about-v1";
-import type { TemplateField, TemplateSpec } from "@/templates/types";
-import { normalizePhone, normalizeUrl, personNameKey, platformFromUrl, straightenText, yearOf } from "./normalize";
+import type { ListItemShape, TemplateField, TemplateSpec } from "@/templates/types";
+import {
+  besidesDays,
+  clockReadings,
+  clockTimesIn,
+  dayName,
+  datesIn,
+  daysNamed,
+  normalizePhone,
+  normalizeUrl,
+  personNameKey,
+  platformFromUrl,
+  straightenText,
+  yearOf,
+} from "./normalize";
 
 /**
  * A quote that is not on the page in full keeps its longest leading run of
@@ -28,9 +41,15 @@ export const WORD_COVERAGE = {
   itemKey: 0.75,
   /** A key the model words itself (wording "summary"): a policy's name, a claim, a segment. */
   summary: 0.5,
+  /** A short heading's item and its quote: the share of either's words the other must have (see headingReason). */
+  heading: 0.5,
 } as const;
 
-/** A summary key this short (content words) is a label, not a claim: "Payment", "Cancellation". */
+/**
+ * A summary key this short (content words) is a label. A heading label
+ * ("Payment", "Cancellation") needs none of its words on the page; any other
+ * ("Veterans", "Fully insured") needs one.
+ */
 const LABEL_MAX_WORDS = 2;
 
 /** Fields whose value is a choice from a fixed list, not a fact from the page: the quote is checked, the value is not. */
@@ -115,8 +134,8 @@ interface TextIndex {
   digitRuns: string[];
   /** Word stems. */
   stems: Set<string>;
-  /** Months named next to a number ("February 7", "7 Feb"). */
-  months: Set<number>;
+  /** Tokens as codes are written, periods dropped: "M.Ed" is "med", "DipAT" is "dipat". */
+  codes: Set<string>;
 }
 
 /**
@@ -173,25 +192,16 @@ function contentStems(normalized: string): string[] {
   return (long.length ? long : words.filter((w) => w.length >= 2)).map(stem);
 }
 
-const MONTH_NUMBERS: Record<string, number> = {
-  january: 1, jan: 1, february: 2, feb: 2, march: 3, mar: 3, april: 4, apr: 4, may: 5,
-  june: 6, jun: 6, july: 7, jul: 7, august: 8, aug: 8, september: 9, sept: 9, sep: 9,
-  october: 10, oct: 10, november: 11, nov: 11, december: 12, dec: 12,
-};
-const MONTH_NAMES = Object.keys(MONTH_NUMBERS).join("|");
-/** A month name next to a number, so "you may book" is not May: "February 7", "Feb. 2018", "7 February", "7th of Feb". */
-const MONTH_NEAR_NUMBER = new RegExp(
-  `\\b(${MONTH_NAMES})\\b\\.?,?\\s*\\d|\\d(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${MONTH_NAMES})\\b`,
-  "g",
-);
+/** A code as written: "MSW", "M.Ed", "RCC-S". */
+const CODE = /[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu;
 
-function monthsOf(normalized: string): Set<number> {
-  const months = new Set<number>();
-  for (const m of normalized.matchAll(MONTH_NEAR_NUMBER)) {
-    const name = m[1] ?? m[2];
-    if (name && MONTH_NUMBERS[name]) months.add(MONTH_NUMBERS[name]);
-  }
-  return months;
+/** A code as compared: lowercase, periods dropped ("M.Ed" and "MEd" are "med"). */
+function codeKey(code: string): string {
+  return code.toLowerCase().replace(/\./g, "");
+}
+
+function codesOf(normalized: string): string[] {
+  return (normalized.match(CODE) ?? []).map(codeKey);
 }
 
 function indexText(normalized: string): TextIndex {
@@ -201,7 +211,7 @@ function indexText(normalized: string): TextIndex {
     numbers: new Set([...numbersOf(normalized), ...spelledNumbersOf(normalized)]),
     digitRuns: normalized.match(/\d+/g) ?? [],
     stems: new Set(wordsOf(normalized).map(stem)),
-    months: monthsOf(normalized),
+    codes: new Set(codesOf(normalized)),
   };
 }
 
@@ -214,7 +224,7 @@ function numbersReason(normalizedValue: string, ix: TextIndex, where: string): s
   return missing === undefined ? null : `${missing} is not ${where}`;
 }
 
-function wordsReason(stems: string[], min: number, sources: TextIndex[], where: string): string | null {
+function wordsReason(stems: string[], min: number, sources: Pick<TextIndex, "stems">[], where: string): string | null {
   if (!stems.length) return null;
   const found = stems.filter((s) => sources.some((ix) => ix.stems.has(s))).length;
   return found / stems.length >= min ? null : `only ${found} of ${stems.length} words are ${where}`;
@@ -259,64 +269,90 @@ function phoneReason(value: string, quote: TextIndex): string | null {
   return null;
 }
 
-const ISO_DATE = /^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?\b/;
-const NUMERIC_DATE = /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/;
+type DateCheck = { value: string } | { reason: string };
 
 /**
- * The year and the day must be in the quote. The month may be a word there
- * ("February 7, 2018" supports "2018-02-07"), so a month number is not
- * required, but a month the quote names must be the value's month.
+ * The year must be in the quote, and any month and day the value gives must
+ * be ones the quote states: "February 7, 2018" supports "2018-02-07" and
+ * "02/07/2018", and nothing in "the spring of 2018" supports "2018-03". A
+ * numeric date passes when one reading (month first or day first) is a date
+ * the quote states. A value that says more than its quote is cut back to what
+ * the quote does state, the year and month or the year alone, because the
+ * year is still a fact the page gives.
  */
-function dateReason(value: string, quote: TextIndex): string | null {
+function checkDate(value: string, quote: TextIndex): DateCheck {
   const v = normalizeForMatch(value);
   const year = yearOf(v);
-  if (!year) return numbersReason(v, quote, "in the quote");
-  if (!quote.numbers.has(year)) return `the year ${year} is not in the quote`;
-
-  const iso = v.match(ISO_DATE);
-  const valueMonths = iso ? new Set([Number(iso[2])]) : monthsOf(v);
-  if (valueMonths.size && quote.months.size && ![...valueMonths].some((m) => quote.months.has(m))) {
-    return "the month is not the one the quote names";
+  if (!year) {
+    const reason = numbersReason(v, quote, "in the quote");
+    return reason ? { reason } : { value };
   }
+  if (!quote.numbers.has(year)) return { reason: `the year ${year} is not in the quote` };
 
-  const rest = numbersOf(v);
-  rest.splice(rest.indexOf(year), 1);
-  let isoMonth = iso ? String(Number(iso[2])) : null;
-  let numericMonth = !iso && NUMERIC_DATE.test(v);
-  for (const n of rest) {
-    if (quote.numbers.has(n)) continue;
-    if (isoMonth !== null && n === isoMonth) {
-      isoMonth = null;
-      continue;
-    }
-    if (numericMonth && Number(n) >= 1 && Number(n) <= 12) {
-      numericMonth = false;
-      continue;
-    }
-    return `${n} is not in the quote`;
+  const readings = datesIn(v);
+  if (!readings.length) {
+    // A year with words around it ("since 2018"): any other number must be in the quote too.
+    const rest = numbersOf(v.replace(year, " "));
+    return rest.every((n) => quote.numbers.has(n)) ? { value } : { value: year };
   }
-  return null;
+  const stated = datesIn(quote.text);
+  let month: number | null = null;
+  for (const r of readings) {
+    const sameMonth = stated.filter((s) => s.month === r.month);
+    if (!sameMonth.length) continue;
+    const day = r.day;
+    if (day === null || sameMonth.some((s) => s.day === day || (s.day === null && quote.numbers.has(String(day))))) {
+      return { value };
+    }
+    month ??= r.month;
+  }
+  return { value: month === null ? year : `${year}-${String(month).padStart(2, "0")}` };
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** What may follow the end of an address or handle: not more of it ("legiitofficial" after "legiit", ".com" after a name). */
+const ADDRESS_END = "(?![a-z0-9_]|[.-][a-z0-9])";
+
+/** True when the text has the address, starting and ending where the address does: "facebook.com/legiitofficial" does not show "facebook.com/legiit". */
+function addressShown(link: string, text: string): boolean {
+  return new RegExp(`(?<![a-z0-9-])${escapeRegExp(link)}${ADDRESS_END}`).test(text);
 }
 
 /**
- * True when the text shows the link: the address without its scheme and www,
- * or, for a social profile, its handle ("@legiitofficial" for youtube.com/@LegiitOfficial).
+ * True when the text shows a profile's handle as a handle: "@cmwlegiit", or
+ * "/legiitofficial" in an address. A word that happens to equal the handle
+ * does not count ("Legiit" the business, "Chris" the person), nor does the
+ * handle inside a longer word or a domain ("darcybaileycounselling.com").
  */
-function linkShown(value: string, text: string): boolean {
+function handleShown(handle: string, text: string): boolean {
+  return new RegExp(`[@/]${escapeRegExp(handle)}${ADDRESS_END}`).test(text);
+}
+
+/**
+ * True when the link is shown: its address (without scheme and www) in the
+ * quote or on the page, or, for a social profile, its handle in the quote
+ * ("@legiitofficial" for youtube.com/@LegiitOfficial). A handle the model
+ * builds from a name is not shown; the profile's real link, when the page
+ * has one, arrives with the page's links.
+ */
+function linkShown(value: string, quote: TextIndex, page: TextIndex): boolean {
   const link = normalizeUrl(value);
   if (!link) return false;
-  if (text.includes(link)) return true;
+  if (addressShown(link, quote.text) || addressShown(link, page.text)) return true;
   const platform = platformFromUrl(value);
   if (!platform || platform === "website") return false;
   const path = link.split(/[?#]/)[0].split("/").filter(Boolean).slice(1);
   const handle = (path[path.length - 1] ?? "").replace(/^@/, "");
-  return handle.length >= 3 && text.includes(handle);
+  return handle.length >= 3 && handleShown(handle, quote.text);
 }
 
 function linkReason(value: string, quote: TextIndex, page: TextIndex): string | null {
   return (
     numbersReason(normalizeForMatch(value), quote, "in the quote") ??
-    (linkShown(value, quote.text) || linkShown(value, page.text) ? null : "the link is not on the page")
+    (linkShown(value, quote, page) ? null : "the link is not on the page")
   );
 }
 
@@ -354,8 +390,10 @@ function scalarReason(field: TemplateField | undefined, value: FactValue, quote:
   switch (type) {
     case "phone":
       return phoneReason(text, quote);
-    case "date":
-      return dateReason(text, quote);
+    case "date": {
+      const checked = checkDate(text, quote);
+      return "reason" in checked ? checked.reason : null;
+    }
     case "url":
       return linkReason(text, quote, page);
     case "long_text":
@@ -372,25 +410,122 @@ function itemKeyOf(field: TemplateField | undefined, item: ListItem): string {
   return field?.itemShape?.[0]?.key ?? Object.keys(item)[0] ?? "";
 }
 
+interface ItemContext {
+  field: TemplateField | undefined;
+  item: ListItem;
+  /** The dedupe key: a name, a question, a profile link. */
+  identity: string;
+  quote: TextIndex;
+  page: TextIndex;
+  /** The page the finding was read from. The extractor is told it, so a link to it is not a guess. */
+  pageUrl: string;
+}
+
+/** Every code ("MSW, RSW, RCC") on the page as the page writes it: an invented credential is a false claim. */
+function codesReason(value: string, page: TextIndex): string | null {
+  for (const code of straightenText(value).match(CODE) ?? []) {
+    if (!page.codes.has(codeKey(code))) return `${code} is not on the page`;
+  }
+  return null;
+}
+
+const INITIALS_SKIP = new Set(["of", "and", "the", "for", "in"]);
+
+/**
+ * The words of the value's phrases that spell out a code the quote gives:
+ * "Registered Clinical Counsellor" for the RCC in "Swetha Ranasuriya, MA, RCC".
+ */
+function spelledOutStems(normalizedValue: string, quote: TextIndex): Set<string> {
+  const out = new Set<string>();
+  for (const phrase of normalizedValue.split(/[,;()/]|\s-\s/)) {
+    const words = wordsOf(phrase).filter((w) => !INITIALS_SKIP.has(w));
+    if (words.length < 2 || !quote.codes.has(words.map((w) => w[0]).join(""))) continue;
+    for (const w of words) out.add(stem(w));
+  }
+  return out;
+}
+
+/**
+ * Short text in an item (a role, a title, an issuer, notes): the scalar text
+ * check, with a phrase that spells out a code in the quote counted as on the page.
+ */
+function itemTextReason(value: string, quote: TextIndex, page: TextIndex): string | null {
+  const v = normalizeForMatch(value);
+  return (
+    numbersReason(v, quote, "in the quote") ??
+    wordsReason(contentStems(v), WORD_COVERAGE.text, [page, quote, { stems: spelledOutStems(v, quote) }], "on the page")
+  );
+}
+
+/** Numbers and words both in the quote. "Free" is on most pages, so a price has to be in the quote that gives it. */
+function quotedReason(value: string, quote: TextIndex): string | null {
+  const v = normalizeForMatch(value);
+  return numbersReason(v, quote, "in the quote") ?? wordsReason(contentStems(v), WORD_COVERAGE.text, [quote], "in the quote");
+}
+
+/**
+ * Opening days compared as days: every day the value names must be a day the
+ * quote names ("Mon - Thu", "Weekdays"), or the page when the quote names none.
+ * Anything else the value says needs its words in the quote or on the page.
+ */
+function daysReason(value: string, days: Set<number>, quote: TextIndex, page: TextIndex): string | null {
+  const inQuote = daysNamed(quote.text);
+  const shown = inQuote.size ? inQuote : daysNamed(page.text);
+  const missing = [...days].find((d) => !shown.has(d));
+  if (missing !== undefined) return `${dayName(missing)} is not ${inQuote.size ? "in the quote" : "on the page"}`;
+  return wordsReason(contentStems(besidesDays(value)), WORD_COVERAGE.itemKey, [quote, page], "in the quote or on the page");
+}
+
+/** A clock time compared in minutes: "5:00 PM" is in a quote that says "17:00", "9 AM" in one that says "9am". */
+function timeReason(value: string, readings: number[], quote: TextIndex): string | null {
+  const shown = clockTimesIn(quote.text);
+  return readings.some((t) => shown.has(t)) ? null : `${value} is not in the quote`;
+}
+
+/** A link in an item: the address of the page the item was read from, or a link the quote or the page shows. */
+function itemLinkReason(value: string, ctx: ItemContext): string | null {
+  const link = normalizeUrl(value);
+  if (link && link === normalizeUrl(ctx.pageUrl)) return null;
+  return linkReason(value, ctx.quote, ctx.page);
+}
+
+/**
+ * A heading of one or two words the model writes ("Payment" over the card
+ * policy) needs none of its words on the page, but the quote and the item
+ * have to be about the same thing: half the quote's words are the item's, or
+ * half the item's words (its heading's too) are in the quote. A heading over a
+ * quote about something else ("Sliding scale" quoted from a line about the
+ * therapists) is not evidence of anything.
+ */
+function headingReason(item: ListItem, quote: TextIndex): string | null {
+  const words = Object.values(item).filter((v): v is string => typeof v === "string");
+  const itemStems = contentStems(normalizeForMatch(words.join(" ")));
+  const quoteStems = contentStems(quote.text);
+  if (!quoteStems.length || !itemStems.length) return null;
+  const itemSet = new Set(itemStems);
+  const quoteShare = quoteStems.filter((s) => itemSet.has(s)).length / quoteStems.length;
+  const itemShare = itemStems.filter((s) => quote.stems.has(s)).length / itemStems.length;
+  return Math.max(quoteShare, itemShare) >= WORD_COVERAGE.heading ? null : "the quote is not about this item";
+}
+
 /**
  * The item's identity (a name, a question, a profile link) must be in the
- * quote or on the page. A key the model words itself is held to less: a short
- * label passes, and a longer one needs half its words on the page.
+ * quote or on the page. A key the model words itself is held to less: a label
+ * of one or two words needs one of them in the quote or on the page ("Veterans"
+ * on a page that never mentions veterans fails), a heading needs a quote about
+ * its item (see headingReason), and a longer key needs half its words.
  */
-function identityReason(
-  field: TemplateField | undefined,
-  type: string | undefined,
-  raw: string,
-  quote: TextIndex,
-  page: TextIndex,
-  wording?: "summary",
-): string | null {
-  if (wording === "summary") {
+function identityReason(ctx: ItemContext, shape: ListItemShape | undefined, raw: string): string | null {
+  const { field, quote, page } = ctx;
+  if (shape?.wording === "summary") {
     const stems = contentStems(normalizeForMatch(raw));
-    if (stems.length <= LABEL_MAX_WORDS) return null;
+    if (stems.length <= LABEL_MAX_WORDS) {
+      if (shape.check === "heading") return headingReason(ctx.item, quote);
+      if (!stems.length || stems.some((s) => quote.stems.has(s) || page.stems.has(s))) return null;
+      return "none of its words are in the quote or on the page";
+    }
     return wordsReason(stems, WORD_COVERAGE.summary, [quote, page], "in the quote or on the page");
   }
-  if (type === "url") return linkShown(raw, quote.text) || linkShown(raw, page.text) ? null : "the link is not on the page";
   const stems =
     field?.itemKind === "person"
       ? wordsOf(personNameKey(raw))
@@ -401,19 +536,53 @@ function identityReason(
 }
 
 /**
- * One list item, key by key. Numbers in a long_text key (a description, a bio)
- * must be on the page and most of its words too; numbers in any other key (a
- * price, a year, credentials) must be in the quote. The dedupe key must also
- * name something the quote or the page names. A failing dedupe or required
- * key fails the item; a failing optional key is left out of it.
+ * Why one key of an item is not supported, or null. Long text (a description,
+ * a bio) is read against the page; a link must be shown; days and times are
+ * compared as days and minutes; codes must each be on the page; a price must
+ * be in its quote; a value the model picks has only its numbers checked. Any
+ * other key is checked as short text (its numbers in the quote, most of its
+ * words in the quote or on the page), and the identity as above.
+ */
+function keyReason(ctx: ItemContext, key: string, raw: string): string | null {
+  const shape = ctx.field?.itemShape?.find((s) => s.key === key);
+  const { quote, page } = ctx;
+  if (shape?.type === "long_text") return longTextReason(raw, page);
+  if (shape?.type === "url") return itemLinkReason(raw, ctx);
+  const numbers = () => numbersReason(normalizeForMatch(raw), quote, "in the quote");
+  switch (shape?.check) {
+    case "days": {
+      const days = daysNamed(raw);
+      if (days.size) return daysReason(raw, days, quote, page);
+      break;
+    }
+    case "time": {
+      const readings = clockReadings(raw);
+      if (readings) return timeReason(raw, readings, quote);
+      break;
+    }
+    case "choice":
+      return numbers();
+    case "codes":
+      return numbers() ?? codesReason(raw, page);
+    case "quoted":
+      return quotedReason(raw, quote);
+  }
+  if (key === ctx.identity) return numbers() ?? identityReason(ctx, shape, raw);
+  return itemTextReason(raw, quote, page);
+}
+
+/**
+ * One list item, key by key (see keyReason). A failing dedupe or required key
+ * fails the item; a failing optional key is left out of it.
  */
 function checkItem(
   field: TemplateField | undefined,
   item: ListItem,
   quote: TextIndex,
   page: TextIndex,
+  pageUrl: string,
 ): { item: ListItem; changed: boolean; reason: string | null } {
-  const identity = itemKeyOf(field, item);
+  const ctx: ItemContext = { field, item, identity: itemKeyOf(field, item), quote, page, pageUrl };
   const kept: ListItem = {};
   let changed = false;
   for (const [key, raw] of Object.entries(item)) {
@@ -422,12 +591,10 @@ function checkItem(
       kept[key] = raw;
       continue;
     }
-    const shape = field?.itemShape?.find((s) => s.key === key);
-    let reason =
-      shape?.type === "long_text" ? longTextReason(raw, page) : numbersReason(normalizeForMatch(raw), quote, "in the quote");
-    if (!reason && key === identity) reason = identityReason(field, shape?.type, raw, quote, page, shape?.wording);
+    const reason = keyReason(ctx, key, raw);
     if (reason) {
-      if (key === identity || shape?.required) return { item, changed: false, reason: `${key}: ${reason}` };
+      const required = field?.itemShape?.find((s) => s.key === key)?.required;
+      if (key === ctx.identity || required) return { item, changed: false, reason: `${key}: ${reason}` };
       changed = true;
       continue;
     }
@@ -441,6 +608,7 @@ function listReason(
   value: FactValue,
   quote: TextIndex,
   page: TextIndex,
+  pageUrl: string,
 ): { value: FactValue; reason: string | null } {
   let items: ListItem[];
   if (Array.isArray(value)) items = value;
@@ -451,7 +619,7 @@ function listReason(
   let changed = !Array.isArray(value);
   const out: ListItem[] = [];
   for (const item of items) {
-    const checked = checkItem(field, item, quote, page);
+    const checked = checkItem(field, item, quote, page, pageUrl);
     if (checked.reason) return { value, reason: checked.reason };
     changed ||= checked.changed;
     out.push(checked.item);
@@ -473,9 +641,14 @@ function verifyFinding(finding: Finding, page: TextIndex, field: TemplateField |
   let value = finding.value;
   if (!CLASSIFICATION_FIELDS.has(finding.fieldId)) {
     if (field?.type === "list" || (!field && Array.isArray(value))) {
-      const checked = listReason(field, value, quote, page);
+      const checked = listReason(field, value, quote, page, finding.url);
       if (checked.reason) return { reason: checked.reason };
       value = checked.value;
+    } else if (field?.type === "date" && typeof value === "string" && value.trim()) {
+      // A date that says more than its quote is cut back to the part the quote states.
+      const checked = checkDate(value.trim(), quote);
+      if ("reason" in checked) return { reason: checked.reason };
+      if (checked.value !== value.trim()) value = checked.value;
     } else {
       const reason = scalarReason(field, value, quote, page);
       if (reason) return { reason };

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { Json } from "@/lib/db/types";
 import type { FactValue, Finding } from "@/lib/facts/types";
 import { ABOUT_V1 } from "@/templates/about-v1";
+import { findingsFromJsonLd } from "./deterministic";
 import { applyUserEdit, mergeFindings, recomputeStats } from "./merge";
 
 const HOME = "https://darcybaileycounselling.com/";
@@ -27,6 +29,23 @@ describe("mergeFindings scalars", () => {
       { quote: "tel:+16045339163", url: HOME, source: "link" },
     ]);
     expect(phone.candidates).toBeUndefined();
+  });
+
+  it("prefers a full date over the year only when its own quote states the month (DATE-MONTH)", () => {
+    const spring = mergeFindings(ABOUT_V1, [
+      finding("founded_date", "2018-03", "We opened in the spring of 2018", HOME),
+      finding("founded_date", "2018", "Serving Langley since 2018", CONTACT),
+      finding("founded_date", "2018", "founded in 2018", FAQ),
+    ]).data.fields.founded_date;
+    expect(spring.status).toBe("found");
+    expect(spring.value).toBe("2018");
+    expect(spring.evidence).toHaveLength(3);
+
+    const march = mergeFindings(ABOUT_V1, [
+      finding("founded_date", "2018", "Serving Langley since 2018", CONTACT),
+      finding("founded_date", "2018-03", "We opened in March 2018", HOME),
+    ]).data.fields.founded_date;
+    expect(march.value).toBe("2018-03");
   });
 
   it("treats a full founding date and its year as one value, preferring the ISO date", () => {
@@ -163,6 +182,25 @@ describe("mergeFindings lists", () => {
     expect(social.evidence).toHaveLength(3);
   });
 
+  it("joins hours written as the page writes them with the same hours from JSON-LD (HOURS-DROP)", () => {
+    const jsonld = findingsFromJsonLd(
+      [{ data: { "@type": "MedicalBusiness", name: "Darcy Bailey", openingHours: ["Mo-Th 09:00-20:00", "Fr 09:00-19:00"] }, raw: "", types: ["MedicalBusiness"] }],
+      HOME,
+    );
+    const { data } = mergeFindings(ABOUT_V1, [
+      ...jsonld,
+      finding("hours", [{ days: "Mon - Thu", opens: "9am", closes: "8pm" }], "Mon - Thu: 9am - 8pm", CONTACT),
+      finding("hours", [{ days: "Friday", opens: "9 AM", closes: "6 PM" }], "Friday 9 AM to 6 PM", FAQ),
+    ]);
+    const hours = data.fields.hours;
+    expect(hours.value).toEqual([
+      { days: "Monday to Thursday", opens: "9:00 AM", closes: "8:00 PM" },
+      { days: "Friday", opens: "9:00 AM", closes: "7:00 PM" },
+    ]);
+    // The same hours written two ways are not a conflict; a different closing time is.
+    expect(hours.itemConflicts?.map((c) => [c.key, c.on])).toEqual([["Friday", ["closes"]]]);
+  });
+
   it("caps list evidence at 20 entries, keeping the earliest", () => {
     const findings = Array.from({ length: 25 }, (_, i) =>
       finding("competitors", [{ name: `Competitor ${i}` }], `quote ${i}`, `${HOME}page-${i}/`),
@@ -253,6 +291,118 @@ describe("mergeFindings people", () => {
     ]);
     expect(names(data.fields.founders.value)).toEqual(["Chris M. Walker", "Jim Sabellico"]);
     expect(data.fields.founders.itemConflicts?.map((c) => c.key)).toEqual(["Chris M. Walker", "Jim Sabellico"]);
+  });
+
+  describe("people who share a surname (MRG-SURNAME)", () => {
+    const PLUMBING_ABOUT = "https://baileyplumbing.com/about/";
+    const PLUMBING_TEAM = "https://baileyplumbing.com/team/";
+    const employees = (page: string, people: Json[]) =>
+      findingsFromJsonLd([{ data: { "@type": "Plumber", name: "Bailey Plumbing", employee: people }, raw: "", types: ["Plumber"] }], page);
+
+    it("keeps a JSON-LD person apart from a relative read from the team page given as her url", () => {
+      const { data } = mergeFindings(ABOUT_V1, [
+        ...employees(PLUMBING_ABOUT, [{ "@type": "Person", name: "Mary Bailey", jobTitle: "Office Manager", url: PLUMBING_TEAM }]),
+        finding("team_members", [{ name: "Mark Bailey", role: "Owner and master plumber", url: PLUMBING_TEAM }], "Mark Bailey, Owner and master plumber", PLUMBING_TEAM),
+        finding("team_members", [{ name: "Mary Bailey", role: "Office Manager", url: PLUMBING_TEAM }], "Mary Bailey, Office Manager", PLUMBING_TEAM),
+      ]);
+      expect(data.fields.team_members.value).toEqual([
+        { name: "Mary Bailey", role: "Office Manager", url: PLUMBING_TEAM },
+        { name: "Mark Bailey", role: "Owner and master plumber", url: PLUMBING_TEAM },
+      ]);
+      expect(data.fields.team_members.itemConflicts).toBeUndefined();
+    });
+
+    it("keeps JSON-LD employees who share a surname and a url apart", () => {
+      const bailey = employees(PLUMBING_ABOUT, [
+        { "@type": "Person", name: "Mark Bailey", url: PLUMBING_TEAM },
+        { "@type": "Person", name: "Mary Bailey", url: PLUMBING_TEAM },
+      ]);
+      expect(names(mergeFindings(ABOUT_V1, bailey).data.fields.team_members.value)).toEqual(["Mark Bailey", "Mary Bailey"]);
+      const legiit = employees(ABOUT, [
+        { "@type": "Person", name: "Djordje Jovanovic", url: "https://legiit.com/team/" },
+        { "@type": "Person", name: "Marija Jovanovic", url: "https://legiit.com/team/" },
+      ]);
+      expect(names(mergeFindings(ABOUT_V1, legiit).data.fields.team_members.value)).toEqual(["Djordje Jovanovic", "Marija Jovanovic"]);
+      // Two names one employee list gives are two people even when one given name starts the other.
+      const family = employees(PLUMBING_ABOUT, [
+        { "@type": "Person", name: "Chris Bailey", url: PLUMBING_TEAM },
+        { "@type": "Person", name: "Christine Bailey", url: PLUMBING_TEAM },
+      ]);
+      expect(names(mergeFindings(ABOUT_V1, family).data.fields.team_members.value)).toEqual(["Chris Bailey", "Christine Bailey"]);
+    });
+
+    it("needs given names that fit before a shared link joins two full names", () => {
+      const profile = "https://baileyplumbing.com/mark-bailey/";
+      const { data } = mergeFindings(ABOUT_V1, [
+        finding("team_members", [{ name: "Mark Bailey", role: "Owner", url: profile }], "Mark Bailey, Owner", PLUMBING_ABOUT),
+        finding("team_members", [{ name: "Mary Bailey", role: "Office Manager", url: profile }], "Mary Bailey, Office Manager", "https://baileyplumbing.com/contact/"),
+        finding("team_members", [{ name: "M. Bailey", role: "Owner", url: profile }], "M. Bailey, Owner", "https://baileyplumbing.com/blog/"),
+      ]);
+      // M. could be either; the profile link joins the initial to the first name it fits.
+      expect(names(data.fields.team_members.value)).toEqual(["Mark Bailey", "Mary Bailey"]);
+    });
+
+    it("treats a page more than one name was read from as a list page, not anyone's profile", () => {
+      const christine = finding("team_members", [{ name: "Christine Bailey", role: "Plumber", url: PLUMBING_TEAM }], "Christine Bailey, Plumber", PLUMBING_TEAM);
+      const chris = employees(PLUMBING_ABOUT, [{ "@type": "Person", name: "Chris Bailey", url: PLUMBING_TEAM }]);
+      const mark = finding("team_members", [{ name: "Mark Bailey", role: "Owner", url: PLUMBING_TEAM }], "Mark Bailey, Owner", PLUMBING_TEAM);
+      expect(names(mergeFindings(ABOUT_V1, [...chris, christine, mark]).data.fields.team_members.value)).toEqual([
+        "Chris Bailey",
+        "Christine Bailey",
+        "Mark Bailey",
+      ]);
+      // With one name read from it, the page is that person's profile, and "Chris" fits "Christine".
+      expect(names(mergeFindings(ABOUT_V1, [...chris, christine]).data.fields.team_members.value)).toEqual(["Chris Bailey"]);
+    });
+
+    it("still takes a profile page as its person's when the site's JSON-LD lists the whole team on it", () => {
+      const profile = "https://darcybaileycounselling.com/palvinder-manhas/";
+      const siteWide = findingsFromJsonLd(
+        [
+          {
+            data: {
+              "@type": "MedicalBusiness",
+              name: "Darcy Bailey & Associates Counselling",
+              employee: [
+                { "@type": "Person", name: "Julie Sprague", url: "https://darcybaileycounselling.com/julie-sprague/" },
+                { "@type": "Person", name: "Nancy Orlikow", url: "https://darcybaileycounselling.com/nancy-orlikow/" },
+              ],
+            },
+            raw: "",
+            types: ["MedicalBusiness"],
+          },
+        ],
+        profile,
+      );
+      const { data } = mergeFindings(ABOUT_V1, [
+        ...siteWide,
+        finding("team_members", [{ name: "Palvinder Manhas-Bains", role: "Registered Clinical Counsellor", url: profile }], "Palvinder Manhas-Bains", profile),
+        finding("team_members", [{ name: "Pal Manhas", role: "Registered Clinical Counsellor", url: profile }], "Pal Manhas", TEAM),
+        finding("team_members", [{ name: "Nancy Orlikow", role: "Senior Therapist" }], "Nancy Orlikow", TEAM),
+      ]);
+      expect(names(data.fields.team_members.value)).toEqual(["Julie Sprague", "Nancy Orlikow", "Palvinder Manhas-Bains"]);
+      expect(data.fields.team_members.itemConflicts?.map((c) => [c.key, c.on])).toEqual([["Palvinder Manhas-Bains", ["name"]]]);
+    });
+
+    it("keeps two names from one page's text apart even when a later variant matches one exactly", () => {
+      const { data } = mergeFindings(ABOUT_V1, [
+        finding("team_members", [{ name: "Swetha Ranasuriya" }], '{"name": "Swetha Ranasuriya"}', TEAM, { source: "jsonld" }),
+        finding("team_members", [{ name: "Swetha Ranasuirya" }], "Swetha Ranasuirya", TEAM),
+        finding("team_members", [{ name: "Swetha Ranasuriya" }], "Swetha Ranasuriya", TEAM),
+      ]);
+      expect(names(data.fields.team_members.value)).toEqual(["Swetha Ranasuriya", "Swetha Ranasuriya"]);
+    });
+
+    it("puts a person with the item that has their exact name before a looser match", () => {
+      const { data } = mergeFindings(ABOUT_V1, [
+        finding("team_members", [{ name: "Bailey", role: "Plumber" }], "Ask for Bailey", PLUMBING_TEAM),
+        finding("team_members", [{ name: "Mary Bailey", role: "Office Manager" }], "Mary Bailey, Office Manager", PLUMBING_ABOUT),
+        finding("team_members", [{ name: "Mary Bailey", role: "Office Manager" }], "Mary Bailey, Office Manager", PLUMBING_TEAM),
+      ]);
+      const team = data.fields.team_members.value as { name?: string }[];
+      expect(team.map((p) => p.name)).toEqual(["Bailey", "Mary Bailey"]);
+      expect(data.fields.team_members.itemConflicts).toBeUndefined();
+    });
   });
 
   it("keeps different people with near names apart", () => {

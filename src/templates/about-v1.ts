@@ -10,8 +10,9 @@ import type { TemplateSpec } from "./types";
 
 export const ABOUT_V1: TemplateSpec = {
   id: "about-v1",
-  // 2: social_profiles conflicts on owner. Raising it re-seeds the templates table.
-  version: 3,
+  // 2: social_profiles conflicts on owner. 4: hours are written as the page writes them, and item
+  // keys say how the quote check reads them (check). Raising it re-seeds the templates table.
+  version: 4,
   name: "About page (eight sections)",
   description:
     "Value proposition, what the company does, what makes it different, who uses it, the team, how it works, key facts table, and FAQ, with Organization or LocalBusiness schema plus AboutPage and FAQPage.",
@@ -304,9 +305,33 @@ export const ABOUT_V1: TemplateSpec = {
         "What are the opening hours, by day? Leave blank if the business has no set hours.",
       rendersIn: ["page", "schema"],
       itemShape: [
-        { key: "days", label: "Days", type: "text", required: true, hint: "Monday to Thursday" },
-        { key: "opens", label: "Opens", type: "text", required: true, hint: "9:00 AM" },
-        { key: "closes", label: "Closes", type: "text", required: true, hint: "8:00 PM" },
+        {
+          key: "days",
+          label: "Days",
+          type: "text",
+          required: true,
+          hint: "Monday to Thursday",
+          extractHint: 'as the page writes them, for example "Monday to Thursday" or "Mon - Thu"',
+          check: "days",
+        },
+        {
+          key: "opens",
+          label: "Opens",
+          type: "text",
+          required: true,
+          hint: "9:00 AM",
+          extractHint: 'as the page writes it, for example "9am" or "09:00"',
+          check: "time",
+        },
+        {
+          key: "closes",
+          label: "Closes",
+          type: "text",
+          required: true,
+          hint: "8:00 PM",
+          extractHint: 'as the page writes it, for example "8pm" or "20:00"',
+          check: "time",
+        },
       ],
       itemKind: "generic",
       dedupeKey: "days",
@@ -358,7 +383,7 @@ export const ABOUT_V1: TemplateSpec = {
       itemShape: [
         { key: "name", label: "Name", type: "text", required: true },
         { key: "description", label: "What it does and the outcome", type: "long_text", required: true },
-        { key: "price", label: "Price", type: "text", hint: "$170 per 50-minute session" },
+        { key: "price", label: "Price", type: "text", hint: "$170 per 50-minute session", check: "quoted" },
         { key: "url", label: "Page", type: "url" },
       ],
       itemKind: "service",
@@ -380,7 +405,7 @@ export const ABOUT_V1: TemplateSpec = {
       rendersIn: ["page", "schema"],
       itemShape: [
         { key: "name", label: "Plan or item", type: "text", required: true },
-        { key: "price", label: "Price", type: "text", required: true, hint: "$47 a month" },
+        { key: "price", label: "Price", type: "text", required: true, hint: "$47 a month", check: "quoted" },
         { key: "notes", label: "Notes", type: "text", hint: "first 7 days free; plus GST" },
       ],
       itemKind: "price",
@@ -591,7 +616,7 @@ export const ABOUT_V1: TemplateSpec = {
       itemShape: [
         { key: "name", label: "Full name", type: "text", required: true },
         { key: "title", label: "Title", type: "text", required: true, hint: "Founder and CEO" },
-        { key: "credentials", label: "Credentials", type: "text", hint: "MSW, RSW, RCC" },
+        { key: "credentials", label: "Credentials", type: "text", hint: "MSW, RSW, RCC", check: "codes" },
         { key: "bio", label: "Backstory (two sentences)", type: "long_text" },
         { key: "url", label: "Profile page", type: "url" },
         { key: "linkedin", label: "LinkedIn", type: "url" },
@@ -633,7 +658,7 @@ export const ABOUT_V1: TemplateSpec = {
       itemShape: [
         { key: "name", label: "Full name", type: "text", required: true },
         { key: "role", label: "Role", type: "text", required: true },
-        { key: "credentials", label: "Credentials", type: "text" },
+        { key: "credentials", label: "Credentials", type: "text", check: "codes" },
         { key: "specialties", label: "Specialties", type: "text" },
         { key: "url", label: "Profile page", type: "url" },
       ],
@@ -748,7 +773,7 @@ export const ABOUT_V1: TemplateSpec = {
         "Any policies the page should state: cancellation notice, refunds, guarantees, confidentiality, payment timing, insurance or funding accepted?",
       rendersIn: ["page"],
       itemShape: [
-        { key: "name", label: "Policy", type: "text", required: true, wording: "summary" },
+        { key: "name", label: "Policy", type: "text", required: true, wording: "summary", check: "heading" },
         { key: "detail", label: "Detail", type: "long_text", required: true },
       ],
       itemKind: "generic",
@@ -792,7 +817,7 @@ export const ABOUT_V1: TemplateSpec = {
         "What are the social profile links for the business, and for the founder? LinkedIn, YouTube, X, Facebook, Instagram, TikTok, and the Google Business Profile all help.",
       rendersIn: ["page", "schema"],
       itemShape: [
-        { key: "platform", label: "Platform", type: "text", required: true },
+        { key: "platform", label: "Platform", type: "text", required: true, check: "choice" },
         { key: "url", label: "Link", type: "url", required: true },
         { key: "owner", label: "Belongs to", type: "text", hint: "the business, or a person's name" },
       ],
