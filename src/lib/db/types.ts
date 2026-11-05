@@ -49,6 +49,8 @@ export type RunCursor = {
   /** Set when discovery had to fall back to following links from the home page. */
   usedSitemap?: boolean;
   homeUrl?: string;
+  /** Step errors in a row; the run fails at MAX_STEP_ERRORS (src/lib/runs/logic.ts). A slice that succeeds resets it. */
+  errorCount?: number;
 };
 
 export type PageLinks = {

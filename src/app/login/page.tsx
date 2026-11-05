@@ -21,7 +21,7 @@ function first(value: string | string[] | undefined): string | undefined {
 function nextFromParams(sp: SearchParams): string {
   const intent = first(sp.intent);
   const site = first(sp.site)?.trim();
-  if (intent === "new" && site) return `/app/new?site=${encodeURIComponent(site)}`;
+  if (intent === "new") return site ? `/app/new?site=${encodeURIComponent(site)}` : "/app/new";
   return safeNext(first(sp.next));
 }
 

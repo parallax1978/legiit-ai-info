@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNext } from "@/app/auth/redirects";
 import { supabasePublishableKey, supabaseUrl } from "@/lib/supabase/env";
 
 /**
@@ -40,10 +41,20 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && pathname === "/login") {
+    const params = request.nextUrl.searchParams;
     const url = request.nextUrl.clone();
-    const next = request.nextUrl.searchParams.get("next");
-    url.pathname = next && next.startsWith("/") ? next : "/app";
     url.search = "";
+    if (params.get("intent") === "new") {
+      // The "scan your site" links carry intent=new and the site; a signed-in visitor goes straight to the form.
+      const site = params.get("site")?.trim();
+      url.pathname = "/app/new";
+      if (site) url.searchParams.set("site", site);
+    } else {
+      // next may carry a query (/app/new?site=...), so it is parsed rather than assigned to pathname.
+      const target = new URL(safeNext(params.get("next")), request.nextUrl.origin);
+      url.pathname = target.pathname;
+      url.search = target.search;
+    }
     return NextResponse.redirect(url);
   }
 
