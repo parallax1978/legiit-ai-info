@@ -51,6 +51,8 @@ export type RunCursor = {
   homeUrl?: string;
   /** Step errors in a row; the run fails at MAX_STEP_ERRORS (src/lib/runs/logic.ts). A slice that succeeds resets it. */
   errorCount?: number;
+  /** Extraction attempts per crawl_pages id; a page is marked failed after config.llm.extractAttempts. */
+  extractAttempts?: Record<string, number>;
 };
 
 export type PageLinks = {

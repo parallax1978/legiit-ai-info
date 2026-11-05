@@ -14,9 +14,10 @@ export function getAnthropic(): Anthropic {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
   client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
-    // Milliseconds. Every call must finish inside one Vercel function invocation.
-    timeout: 50_000,
-    maxRetries: 2,
+    // Milliseconds. Every call must finish inside one Vercel function invocation;
+    // see config.llm for why the SDK does not retry.
+    timeout: config.llm.timeoutMs,
+    maxRetries: config.llm.maxRetries,
   });
   return client;
 }

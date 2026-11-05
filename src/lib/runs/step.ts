@@ -77,6 +77,19 @@ function robotsRawOf(robots: Json | null): string | null {
   return typeof raw === "string" ? raw : null;
 }
 
+/** The Crawl-delay robots.txt asked for, in milliseconds, capped so a step still makes progress. */
+export const MAX_CRAWL_DELAY_MS = 5_000;
+
+function crawlDelayOf(robots: Json | null): number {
+  if (!robots || typeof robots !== "object" || Array.isArray(robots)) return 0;
+  const ms = robots.crawlDelayMs;
+  return typeof ms === "number" && ms > 0 ? Math.min(ms, MAX_CRAWL_DELAY_MS) : 0;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function cursorOf(run: CrawlRunRow): StepCursor {
   return { ...(run.cursor && typeof run.cursor === "object" ? run.cursor : {}) };
 }
@@ -297,8 +310,15 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
     maxBytes: config.crawl.maxHtmlBytes,
   };
 
+  // A site that asks for a Crawl-delay is read one page at a time with that pause between pages.
+  const crawlDelayMs = crawlDelayOf(run.robots);
+  const parallel = crawlDelayMs > 0 ? 1 : config.crawl.parallel;
+  let batches = 0;
+
   while (queue.length && Date.now() - ctx.started < config.crawl.stepBudgetMs) {
-    const taken = takeBatch(queue, config.crawl.parallel);
+    if (crawlDelayMs > 0 && batches > 0) await sleep(crawlDelayMs);
+    batches++;
+    const taken = takeBatch(queue, parallel);
     queue = taken.rest;
     const batch = taken.batch.filter((entry) => {
       const row = rowsByKey.get(pageKey(entry.url));
@@ -500,10 +520,11 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
     group.forEach((page, i) => outcomes.set(page.id, settled[i]));
   }
 
-  // Every page failing the same way (no API key, the API down) is a step error, not a page error:
-  // nothing is written, the queue is kept, and the run fails after the usual three tries.
+  // Every page of a batch failing the same way (no API key, the API down) is a step error, not a
+  // page error: nothing is written, the queue is kept, and the run fails after the usual three
+  // tries. A single page is handled below so one flaky page at the end of the queue cannot fail the run.
   const rejected = [...outcomes.values()].filter((r): r is PromiseRejectedResult => r.status === "rejected");
-  if (pages.length && rejected.length === pages.length) {
+  if (pages.length > 1 && rejected.length === pages.length) {
     throw new Error(`Extraction failed: ${errorText(rejected[0].reason)}`);
   }
 
@@ -511,6 +532,8 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
   let cost = Number(run.cost_usd ?? 0);
   let log = run.log;
   let extracted = 0;
+  const attempts: Record<string, number> = { ...(cursor.extractAttempts ?? {}) };
+  const retry: string[] = [];
 
   for (const id of ids) {
     const page = byId.get(id);
@@ -534,20 +557,27 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
       extracted++;
     } else {
       const message = errorText(outcome.reason);
-      await q.updatePage(db, id, { status: "failed", error: `extraction: ${message}` });
-      log = appendLog(log, "warn", `Could not pull facts from ${page.url}: ${message}`);
+      attempts[id] = (attempts[id] ?? 0) + 1;
+      if (attempts[id] < config.llm.extractAttempts) {
+        // A timeout or a transient API error: the page goes to the back of the queue for one more try.
+        retry.push(id);
+        log = appendLog(log, "warn", `Could not pull facts from ${page.url} (${message}); will try once more`);
+      } else {
+        await q.updatePage(db, id, { status: "failed", error: `extraction: ${message}` });
+        log = appendLog(log, "warn", `Could not pull facts from ${page.url}: ${message}`);
+      }
     }
   }
 
   const done = new Set(ids);
-  const remaining = extractQueue.filter((id) => !done.has(id));
+  const remaining = [...extractQueue.filter((id) => !done.has(id)), ...retry];
   log = appendLog(log, "info", extractBatchMessage(extracted, pagesExtracted, run.pages_fetched));
   const finished = remaining.length === 0;
   if (finished) log = appendLog(log, "info", "Putting the fact sheet together");
 
   return q.updateRun(db, run.id, {
     ...(finished ? { phase: "merge" as const } : {}),
-    cursor: storeCursor({ ...cursor, extractQueue: remaining, errorCount: 0 }),
+    cursor: storeCursor({ ...cursor, extractQueue: remaining, extractAttempts: attempts, errorCount: 0 }),
     pages_extracted: pagesExtracted,
     cost_usd: Math.round(cost * 1_000_000) / 1_000_000,
     log,

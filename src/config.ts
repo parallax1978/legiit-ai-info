@@ -94,8 +94,12 @@ export const config = {
     parallel: 6,
     /** A step stops starting new work after this long. */
     stepBudgetMs: 20_000,
-    /** How long one step may hold the run lock before another caller may take it. */
-    lockLeaseMs: 45_000,
+    /**
+     * How long one step may hold the run lock before another caller may take it.
+     * Longer than the function ceiling (stepMaxDurationSeconds), so a step that
+     * Vercel kills at the ceiling can never overlap the retry that follows it.
+     */
+    lockLeaseMs: 70_000,
     /** Sitemap files read while discovering URLs. */
     maxSitemaps: 12,
     maxSitemapUrls: 2_000,
@@ -106,6 +110,19 @@ export const config = {
     pagesPerStep: 4,
     parallel: 4,
     maxOutputTokens: 6_000,
+  },
+
+  llm: {
+    /**
+     * Per-request timeout, milliseconds. Four extraction calls run in parallel
+     * inside one step, so one slow call must still finish inside the function
+     * ceiling. The SDK does not retry (a failed page is retried on a later step
+     * instead), because a retry inside the step would double the wall time.
+     */
+    timeoutMs: 40_000,
+    maxRetries: 0,
+    /** Times a page's extraction call may fail before the page is marked failed. */
+    extractAttempts: 2,
   },
 
   plans: {

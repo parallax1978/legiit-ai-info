@@ -115,7 +115,9 @@ No queue service. Every long job is a state machine in Postgres (`crawl_runs.pha
 Each step exports `maxDuration = 60` and stops itself at 20 s, so it fits inside both
 the old 10 s/60 s and the Fluid Compute limits on Vercel's Hobby and Pro plans. The
 browser drives the loop: call `step`, render progress from the response, call again.
-A lock column (`locked_at`, 45 s lease) stops two tabs stepping the same run. If the
+A lock column (`locked_at`, 70 s lease, longer than the function ceiling) stops two
+tabs stepping the same run, and a step that Vercel kills at the ceiling cannot
+overlap the retry that follows it. If the
 user closes the tab the run pauses and resumes from the cursor when they come back.
 
 If background completion becomes a requirement (user closes the tab and expects the
