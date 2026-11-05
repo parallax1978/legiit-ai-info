@@ -357,6 +357,30 @@ export async function updateFactSheet(db: Db, factSheetId: string, patch: FactSh
   check("update fact sheet", await db.from("fact_sheets").update(patch).eq("id", factSheetId));
 }
 
+/**
+ * Writes the fact sheet only if nobody changed it since it was read (its
+ * updated_at, which a trigger moves on every update, still matches). False
+ * when another edit landed first: read again and reapply.
+ */
+export async function updateFactSheetIfUnchanged(
+  db: Db,
+  factSheetId: string,
+  readUpdatedAt: string,
+  patch: FactSheetUpdate,
+): Promise<boolean> {
+  const row = maybe(
+    "update fact sheet",
+    await db
+      .from("fact_sheets")
+      .update(patch)
+      .eq("id", factSheetId)
+      .eq("updated_at", readUpdatedAt)
+      .select("id")
+      .maybeSingle(),
+  );
+  return row !== null;
+}
+
 // ---------------------------------------------------------------------------
 // Usage events
 // ---------------------------------------------------------------------------

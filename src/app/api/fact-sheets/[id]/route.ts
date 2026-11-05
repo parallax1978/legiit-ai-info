@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isUuid, jsonError, readJsonBody, requireApiUser, serverError } from "@/app/api/_lib/http";
 import { applyUserEdit, recomputeStats, type UserEdit } from "@/lib/extract/merge";
 import { emptyField, type FactField, type FactSheetData, type FactSheetStats, type FactValue } from "@/lib/facts/types";
-import { getFactSheetForUser, updateFactSheet } from "@/lib/runs/db";
+import { getFactSheetForUser, updateFactSheetIfUnchanged } from "@/lib/runs/db";
 import { createServiceClient } from "@/lib/supabase/service";
 import { TEMPLATES } from "@/templates/about-v1";
 import type { TemplateField } from "@/templates/types";
@@ -11,6 +11,9 @@ import type { TemplateField } from "@/templates/types";
 export const runtime = "nodejs";
 
 const MAX_TEXT = 20_000;
+
+/** Reads and writes tried when another edit keeps landing first. */
+const MAX_WRITE_ATTEMPTS = 4;
 
 const AddressSchema = z
   .strictObject({
@@ -81,35 +84,40 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   try {
     const db = createServiceClient();
-    const sheet = await getFactSheetForUser(db, id, user.id);
-    if (!sheet) return jsonError(404, "Fact sheet not found.");
+    // Two edits at once (two tabs, a double click) must not overwrite each other: each
+    // write applies only to the version it read, and a lost race reads again.
+    for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt++) {
+      const sheet = await getFactSheetForUser(db, id, user.id);
+      if (!sheet) return jsonError(404, "Fact sheet not found.");
 
-    const spec = TEMPLATES[sheet.template_id];
-    if (!spec) return jsonError(400, "This fact sheet uses a template the app no longer has.");
-    const field = spec.fields.find((f) => f.id === edit.fieldId);
-    if (!field) return jsonError(400, "That field is not part of the template.");
+      const spec = TEMPLATES[sheet.template_id];
+      if (!spec) return jsonError(400, "This fact sheet uses a template the app no longer has.");
+      const field = spec.fields.find((f) => f.id === edit.fieldId);
+      if (!field) return jsonError(400, "That field is not part of the template.");
 
-    if ("value" in edit) {
-      const mismatch = valueMismatch(field, edit.value);
-      if (mismatch) return jsonError(400, mismatch);
+      if ("value" in edit) {
+        const mismatch = valueMismatch(field, edit.value);
+        if (mismatch) return jsonError(400, mismatch);
+      }
+
+      const fields = sheet.data && typeof sheet.data === "object" && sheet.data.fields ? { ...sheet.data.fields } : {};
+      const current = fields[field.id] ?? emptyField();
+
+      let next: FactField;
+      try {
+        next = applyUserEdit(current, toUserEdit(edit));
+      } catch (e) {
+        return jsonError(400, e instanceof Error ? e.message : "That edit could not be applied.");
+      }
+
+      fields[field.id] = next;
+      const data: FactSheetData = { templateId: spec.id, fields };
+      const stats = recomputeStats(spec, data, statsOf(sheet.stats));
+      if (await updateFactSheetIfUnchanged(db, sheet.id, sheet.updated_at, { data, stats })) {
+        return NextResponse.json({ field: next, stats });
+      }
     }
-
-    const fields = sheet.data && typeof sheet.data === "object" && sheet.data.fields ? { ...sheet.data.fields } : {};
-    const current = fields[field.id] ?? emptyField();
-
-    let next: FactField;
-    try {
-      next = applyUserEdit(current, toUserEdit(edit));
-    } catch (e) {
-      return jsonError(400, e instanceof Error ? e.message : "That edit could not be applied.");
-    }
-
-    fields[field.id] = next;
-    const data: FactSheetData = { templateId: spec.id, fields };
-    const stats = recomputeStats(spec, data, statsOf(sheet.stats));
-    await updateFactSheet(db, sheet.id, { data, stats });
-
-    return NextResponse.json({ field: next, stats });
+    return jsonError(409, "Another change to this fact sheet was saving at the same time. Try again.");
   } catch (e) {
     return serverError("PATCH /api/fact-sheets/[id]", e, "The change could not be saved. Try again in a moment.");
   }
