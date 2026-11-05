@@ -1,11 +1,15 @@
 /*
   Thin fetch wrappers. Every request has a timeout, a byte cap, and an SSRF
-  guard: the URL, every redirect hop, and the addresses its host resolves to
-  are checked before anything is requested, and redirects are followed by
-  hand so no hop is requested unchecked. Nothing here throws: errors come back
-  in the result so a step can record them and move on.
+  guard. The URL and every redirect hop are checked before they are
+  requested (redirects are followed by hand), and the socket's own DNS
+  lookup refuses private addresses, so the address checked is the address
+  connected to: a domain that answers with a public address for a check and a
+  private one for the connection gets nowhere. Nothing here throws: errors
+  come back in the result so a step can record them and move on.
 */
-import { lookup } from "node:dns/promises";
+import { lookup as dnsLookup, type LookupAddress, type LookupOptions } from "node:dns";
+import type { LookupFunction } from "node:net";
+import { Agent, ProxyAgent, fetch as undiciFetch, type Dispatcher } from "undici";
 import { isIpLiteral, isPrivateHost, isSameSite } from "./url";
 
 /** Resolves a host name to the addresses it points at. */
@@ -30,9 +34,8 @@ export type FetchPageOptions = {
   maxBytes: number;
   fetchImpl?: typeof fetch;
   /**
-   * Resolves a host for the private-address check. Defaults to DNS when
-   * fetchImpl is not given; tests that stub fetch skip the lookup unless they
-   * pass one.
+   * A pre-request address check for an injected fetchImpl (tests). The default
+   * fetch does not need it: its connect-time lookup refuses private addresses.
    */
   resolveHost?: ResolveHost;
   /** Epoch milliseconds. No request starts after it, and the timeout is cut to fit before it. */
@@ -68,26 +71,59 @@ const HTML_ACCEPT = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5";
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 // ---------------------------------------------------------------------------
-// DNS
+// The guarded connection
 // ---------------------------------------------------------------------------
 
-const DNS_CACHE_MS = 60_000;
-const DNS_CACHE_MAX = 500;
-const dnsCache = new Map<string, { at: number; addresses: string[] }>();
+/** The error code the connect-time lookup gives a host that resolves to a private address. */
+export const PRIVATE_ADDRESS_CODE = "EPRIVATEADDRESS";
 
-/** DNS lookup of every A and AAAA record, cached for a minute per process. */
-export const resolveWithDns: ResolveHost = async (hostname) => {
-  const cached = dnsCache.get(hostname);
-  if (cached && Date.now() - cached.at < DNS_CACHE_MS) return cached.addresses;
-  const records = await lookup(hostname, { all: true, verbatim: true });
-  const addresses = records.map((r) => r.address);
-  if (dnsCache.size >= DNS_CACHE_MAX) {
-    const oldest = dnsCache.keys().next().value;
-    if (oldest !== undefined) dnsCache.delete(oldest);
-  }
-  dnsCache.set(hostname, { at: Date.now(), addresses });
-  return addresses;
+/**
+ * A socket lookup that refuses private addresses. undici calls it when it
+ * opens each connection, so every address the crawler connects to passes
+ * through isPrivateHost; one private answer refuses the host.
+ */
+export const guardedLookup: LookupFunction = (hostname, options, callback) => {
+  const opts: LookupOptions = { ...options, all: true };
+  dnsLookup(hostname, opts, (err, result) => {
+    if (err) {
+      callback(err, "", 0);
+      return;
+    }
+    const addresses = (Array.isArray(result) ? result : []) as LookupAddress[];
+    if (!addresses.length) {
+      callback(Object.assign(new Error(`${hostname} did not resolve`), { code: "ENOTFOUND" }), "", 0);
+      return;
+    }
+    if (addresses.some((a) => isPrivateHost(a.address))) {
+      callback(Object.assign(new Error("private or local host"), { code: PRIVATE_ADDRESS_CODE }), "", 0);
+      return;
+    }
+    if (options.all) callback(null, addresses);
+    else callback(null, addresses[0].address, addresses[0].family);
+  });
 };
+
+let dispatcher: Dispatcher | null = null;
+
+/**
+ * The connection pool for crawler requests. In development, CRAWLER_PROXY_URL
+ * routes requests through an HTTP proxy for sandboxes that need one; the proxy
+ * resolves names itself, so the connect-time address check does not apply
+ * there, and the setting is ignored in production.
+ */
+function crawlerDispatcher(): Dispatcher {
+  if (dispatcher) return dispatcher;
+  const proxy = process.env.NODE_ENV !== "production" ? process.env.CRAWLER_PROXY_URL : undefined;
+  dispatcher = proxy ? new ProxyAgent(proxy) : new Agent({ connect: { lookup: guardedLookup } });
+  return dispatcher;
+}
+
+/** fetch through the guarded pool. The default when no fetchImpl is given. */
+const guardedFetch: typeof fetch = (input, init) =>
+  undiciFetch(input as Parameters<typeof undiciFetch>[0], {
+    ...(init as Parameters<typeof undiciFetch>[1]),
+    dispatcher: crawlerDispatcher(),
+  }) as unknown as Promise<Response>;
 
 // ---------------------------------------------------------------------------
 // Checks
@@ -148,6 +184,7 @@ function errorMessage(e: unknown, timeoutMs: number): string {
     const cause: unknown = "cause" in e ? e.cause : undefined;
     const code =
       cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string" ? cause.code : null;
+    if (code === PRIVATE_ADDRESS_CODE) return "private or local host";
     if (code) return `could not connect (${code})`;
     return e.message.replace(/\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?/g, "[address]");
   }
@@ -227,8 +264,8 @@ export async function fetchText(url: string, opts: FetchTextOptions): Promise<Fe
   const timeoutMs = requestTimeout(opts);
   if (timeoutMs < MIN_REQUEST_MS) return { ...base, error: "out of time for this step" };
 
-  const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
-  const resolve = opts.resolveHost ?? (opts.fetchImpl ? null : resolveWithDns);
+  const fetchImpl = opts.fetchImpl ?? guardedFetch;
+  const resolve = opts.resolveHost ?? null;
   // One timeout for the whole chain of hops and the body.
   const signal = AbortSignal.timeout(timeoutMs);
   const headers = {

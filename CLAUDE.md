@@ -21,7 +21,8 @@ SITES=https://a.com,https://b.com pnpm smoke:crawl   # live crawl, no database o
 sites and lists the ranked queue with reasons plus the cleaned text of the top
 pages. Use it after changing ranking or cleaning rules, or to see what a scan
 will pick on a client's site before spending model tokens. Behind an HTTP proxy
-set `NODE_USE_ENV_PROXY=1`.
+set `CRAWLER_PROXY_URL` (development only and ignored in production; the proxy
+resolves names itself, so the connect-time private-address check does not run).
 
 Local migration check: start PostgreSQL 16 on port 54329 with trust auth, create a
 database `lai`, then `pnpm db:check`. The harness in `supabase/test/harness.sql`

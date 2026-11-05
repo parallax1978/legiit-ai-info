@@ -8,7 +8,8 @@
     SITES=https://example.com,https://other.example pnpm smoke:crawl
 
   Use it to check what a scan will pick on a client's site before spending
-  model tokens, or after changing the ranking or cleaning rules.
+  model tokens, or after changing the ranking or cleaning rules. Behind an
+  HTTP proxy, set CRAWLER_PROXY_URL (development only).
 */
 import { writeFileSync } from "node:fs";
 import { it } from "vitest";
