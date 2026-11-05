@@ -266,3 +266,51 @@ describe("verifyFindings value checks", () => {
     ]);
   });
 });
+
+describe("keys the model words itself", () => {
+  const page =
+    "A credit card is required to book and is charged on the day of the session. " +
+    "Cancellations need 48 hours' notice, or the full session fee is charged. " +
+    "Over 70 percent of clients come from word of mouth.";
+  const finding = (fieldId: string, item: Record<string, string>, quote: string) => ({
+    fieldId,
+    value: [item],
+    quote,
+    url: "https://x.test/rates",
+    source: "page" as const,
+    confidence: 0.9,
+  });
+
+  it("keeps a policy whose short label is not on the page when its detail is", () => {
+    const r = verifyFindings(
+      [finding("policies", { name: "Payment", detail: "A credit card is required to book and is charged on the day of the session." }, "A credit card is required to book")],
+      page,
+    );
+    expect(r.dropped).toEqual([]);
+  });
+
+  it("still requires a label's numbers to be in the quote", () => {
+    const r = verifyFindings(
+      [finding("policies", { name: "24-hour cancellation", detail: "Cancellations need 48 hours' notice, or the full session fee is charged." }, "Cancellations need 48 hours' notice")],
+      page,
+    );
+    expect(r.dropped).toHaveLength(1);
+    expect(r.reasons[0]).toContain("24");
+  });
+
+  it("drops a longer claim whose words are mostly not on the page", () => {
+    const r = verifyFindings(
+      [finding("track_record", { claim: "The most trusted award winning counselling team nationwide" }, "Over 70 percent of clients come from word of mouth.")],
+      page,
+    );
+    expect(r.dropped).toHaveLength(1);
+  });
+
+  it("keeps a longer claim with half its words on the page", () => {
+    const r = verifyFindings(
+      [finding("track_record", { claim: "Most clients come by word of mouth" }, "Over 70 percent of clients come from word of mouth.")],
+      page,
+    );
+    expect(r.dropped).toEqual([]);
+  });
+});

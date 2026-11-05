@@ -26,7 +26,12 @@ export const WORD_COVERAGE = {
   longText: 0.7,
   /** The dedupe key of a list item (a name, a question, a segment), in the quote or on the page. */
   itemKey: 0.75,
+  /** A key the model words itself (wording "summary"): a policy's name, a claim, a segment. */
+  summary: 0.5,
 } as const;
+
+/** A summary key this short (content words) is a label, not a claim: "Payment", "Cancellation". */
+const LABEL_MAX_WORDS = 2;
 
 /** Fields whose value is a choice from a fixed list, not a fact from the page: the quote is checked, the value is not. */
 const CLASSIFICATION_FIELDS = new Set(["business_type"]);
@@ -367,8 +372,24 @@ function itemKeyOf(field: TemplateField | undefined, item: ListItem): string {
   return field?.itemShape?.[0]?.key ?? Object.keys(item)[0] ?? "";
 }
 
-/** The item's identity (a name, a question, a profile link) must be in the quote or on the page. */
-function identityReason(field: TemplateField | undefined, type: string | undefined, raw: string, quote: TextIndex, page: TextIndex): string | null {
+/**
+ * The item's identity (a name, a question, a profile link) must be in the
+ * quote or on the page. A key the model words itself is held to less: a short
+ * label passes, and a longer one needs half its words on the page.
+ */
+function identityReason(
+  field: TemplateField | undefined,
+  type: string | undefined,
+  raw: string,
+  quote: TextIndex,
+  page: TextIndex,
+  wording?: "summary",
+): string | null {
+  if (wording === "summary") {
+    const stems = contentStems(normalizeForMatch(raw));
+    if (stems.length <= LABEL_MAX_WORDS) return null;
+    return wordsReason(stems, WORD_COVERAGE.summary, [quote, page], "in the quote or on the page");
+  }
   if (type === "url") return linkShown(raw, quote.text) || linkShown(raw, page.text) ? null : "the link is not on the page";
   const stems =
     field?.itemKind === "person"
@@ -404,7 +425,7 @@ function checkItem(
     const shape = field?.itemShape?.find((s) => s.key === key);
     let reason =
       shape?.type === "long_text" ? longTextReason(raw, page) : numbersReason(normalizeForMatch(raw), quote, "in the quote");
-    if (!reason && key === identity) reason = identityReason(field, shape?.type, raw, quote, page);
+    if (!reason && key === identity) reason = identityReason(field, shape?.type, raw, quote, page, shape?.wording);
     if (reason) {
       if (key === identity || shape?.required) return { item, changed: false, reason: `${key}: ${reason}` };
       changed = true;

@@ -11,7 +11,7 @@ import type { TemplateSpec } from "./types";
 export const ABOUT_V1: TemplateSpec = {
   id: "about-v1",
   // 2: social_profiles conflicts on owner. Raising it re-seeds the templates table.
-  version: 2,
+  version: 3,
   name: "About page (eight sections)",
   description:
     "Value proposition, what the company does, what makes it different, who uses it, the team, how it works, key facts table, and FAQ, with Organization or LocalBusiness schema plus AboutPage and FAQPage.",
@@ -436,7 +436,7 @@ export const ABOUT_V1: TemplateSpec = {
         "What sets the business apart, in specific terms? Numbers, credentials, guarantees, and named competitors all count. Slogans do not.",
       rendersIn: ["page"],
       itemShape: [
-        { key: "claim", label: "Claim", type: "text", required: true },
+        { key: "claim", label: "Claim", type: "text", required: true, wording: "summary" },
         { key: "detail", label: "The fact behind it", type: "long_text" },
       ],
       itemKind: "generic",
@@ -542,7 +542,7 @@ export const ABOUT_V1: TemplateSpec = {
       question:
         "Any results or reputation numbers worth stating: review counts, ratings, referral rates, retention, revenue scale?",
       rendersIn: ["page"],
-      itemShape: [{ key: "claim", label: "Claim", type: "text", required: true }],
+      itemShape: [{ key: "claim", label: "Claim", type: "text", required: true, wording: "summary" }],
       itemKind: "generic",
       dedupeKey: "claim",
     },
@@ -571,7 +571,7 @@ export const ABOUT_V1: TemplateSpec = {
       question:
         "Who exactly uses the business? List each group with the situation they are in, for example 'couples who want to rebuild trust' or 'agencies that need vetted freelancers for client work'.",
       rendersIn: ["page"],
-      itemShape: [{ key: "segment", label: "Segment", type: "text", required: true }],
+      itemShape: [{ key: "segment", label: "Segment", type: "text", required: true, wording: "summary" }],
       itemKind: "segment",
       dedupeKey: "segment",
     },
@@ -748,7 +748,7 @@ export const ABOUT_V1: TemplateSpec = {
         "Any policies the page should state: cancellation notice, refunds, guarantees, confidentiality, payment timing, insurance or funding accepted?",
       rendersIn: ["page"],
       itemShape: [
-        { key: "name", label: "Policy", type: "text", required: true },
+        { key: "name", label: "Policy", type: "text", required: true, wording: "summary" },
         { key: "detail", label: "Detail", type: "long_text", required: true },
       ],
       itemKind: "generic",

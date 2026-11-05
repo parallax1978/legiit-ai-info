@@ -33,6 +33,12 @@ export interface ListItemShape {
   required?: boolean;
   /** Shown to the user as a hint and to the extractor as guidance. */
   hint?: string;
+  /**
+   * "summary": the model writes this key in its own words (a policy's name, a
+   * differentiator's headline, a customer segment), so its words need not all
+   * be on the page. Its numbers must still be in the quote.
+   */
+  wording?: "summary";
 }
 
 export interface TemplateField {
