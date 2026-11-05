@@ -227,6 +227,7 @@ describe("rankUrl on real-site slugs", () => {
     );
     expect(rankUrl("https://e.com/about-2").score).toBeLessThan(rankUrl("https://e.com/about").score);
     expect(rankUrl("https://e.com/staging/contact").score).toBeLessThan(rankUrl("https://e.com/faq").score);
+    expect(rankUrl("https://e.com/staging/contact", "Contact").score).toBeLessThan(rankUrl("https://e.com/faq").score);
   });
 
   it("only lets short link text name a page", () => {

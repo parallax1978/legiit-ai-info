@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:check": "psql -h /tmp -p 54329 -U postgres -v ON_ERROR_STOP=1 -q -c \"drop database if exists lai_check\" -c \"create database lai_check\" && psql -h /tmp -p 54329 -U postgres -d lai_check -v ON_ERROR_STOP=1 -q -f supabase/test/harness.sql -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_tighten_rls.sql -f supabase/test/rls_check.sql"
+    "db:check": "psql -h /tmp -p 54329 -U postgres -v ON_ERROR_STOP=1 -q -c \"drop database if exists lai_check\" -c \"create database lai_check\" && psql -h /tmp -p 54329 -U postgres -d lai_check -v ON_ERROR_STOP=1 -q -f supabase/test/harness.sql -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_tighten_rls.sql -f supabase/test/rls_check.sql",
+    "smoke:crawl": "vitest run --config vitest.smoke.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.5.0",

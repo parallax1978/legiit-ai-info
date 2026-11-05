@@ -14,7 +14,14 @@ pnpm typecheck    # tsc --noEmit
 pnpm lint         # eslint
 pnpm test         # vitest run
 pnpm db:check     # apply migrations to a local PostgreSQL and run the RLS checks (needs a running server, see below)
+SITES=https://a.com,https://b.com pnpm smoke:crawl   # live crawl, no database or model; writes smoke-crawl-report.txt
 ```
+
+`pnpm smoke:crawl` runs discovery, fetch, cleaning, and platform detection on live
+sites and lists the ranked queue with reasons plus the cleaned text of the top
+pages. Use it after changing ranking or cleaning rules, or to see what a scan
+will pick on a client's site before spending model tokens. Behind an HTTP proxy
+set `NODE_USE_ENV_PROXY=1`.
 
 Local migration check: start PostgreSQL 16 on port 54329 with trust auth, create a
 database `lai`, then `pnpm db:check`. The harness in `supabase/test/harness.sql`

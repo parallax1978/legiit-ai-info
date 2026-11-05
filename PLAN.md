@@ -213,3 +213,41 @@ dark CTA band), empty states, error states, re-run, Open Graph image, polish.
   conflict, missing fields, quote verification dropping unquoted values.
 - `generate/lint.test.ts` and `generate/schema.test.ts` (slice 3) with the two example
   fact sheets in `examples/fixtures/` as inputs.
+
+## Status
+
+**Slice 1 is built** (branch `claude/friendly-heisenberg-q66yrv`): sign-in, the
+landing page, creating a project, the stepped crawl with progress, extraction,
+and the review screen with evidence, conflicts, and questions for missing fields.
+
+Hardening after a 4-lens adversarial review (28 findings, all fixed):
+- Security: an SSRF bypass through IPv4-mapped IPv6 addresses, unchecked
+  redirect hops, a session-client policy that let a user set their own plan to
+  paid, an open redirect after sign-in, and an open image proxy.
+- Run machine: steps that could loop forever when killed at the time limit,
+  retries that lost or duplicated pages, duplicate fact sheets, and project
+  status after failed re-runs. Covered by an in-memory database test that fails
+  11 of 13 cases on the previous code.
+- Extraction: quotes with fabricated tails, values the quote does not state,
+  different people merged into one, and personal profiles shown as the
+  business's. Against the example pages' real text, 0 honest visible-text
+  values are dropped.
+- Screens: phone navigation, overflow, error states, and copy.
+
+A live crawl of five real sites (WordPress, Shopify, Webflow, a client-rendered
+app, Next.js) fixed the page ranking: keyword position, home page links, and
+probes for key pages a client-rendered site never links.
+
+**Not yet verified end to end.** There was no Supabase project or Anthropic key
+in the build environment, so the magic link, a real scan, and Haiku's actual
+output have not run together. The PostgREST request shapes were checked against
+postgrest-js and the documented syntax, the migrations against PostgreSQL 16,
+and the crawler against live sites. The first deploy should run one scan on a
+known site and read crawl_runs.log and llm_calls (see docs/deploy.md).
+
+**Open items for later slices**
+- Usage caps on POST /api/projects (slice 5).
+- Manual mode and the guided question flow (slice 2).
+- DNS rebinding: the crawler checks a host's addresses before it connects, but
+  the connection does its own lookup. Low risk on Vercel (no metadata service
+  or private network); revisit if the app moves to a VPC.

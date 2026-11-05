@@ -483,7 +483,7 @@ const HOME_ALIAS_SCORE = 260;
 const PRODUCT_ITEM_SCORE = 180;
 const BLOG_SCORE = 100;
 const LINK_TEXT_PENALTY = 50;
-const STALE_PENALTY = 150;
+const STALE_PENALTY = 300;
 /** Extra for a URL the home page links to: the site's own navigation says it matters. */
 export const HOME_LINK_BONUS = 40;
 
@@ -640,10 +640,10 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
     }
   }
 
-  const stale = segments.some((seg) => tokenize(seg).some((t) => STALE_TOKENS.has(t)));
-  if (stale || /-\d$/.test(segments[segments.length - 1] ?? "")) {
-    score -= STALE_PENALTY;
-  }
+  // A stale or staging copy ranks low however it is linked; applied after the link text below.
+  const stale =
+    segments.some((seg) => tokenize(seg).some((t) => STALE_TOKENS.has(t))) ||
+    /-\d$/.test(segments[segments.length - 1] ?? "");
 
   if (linkText) {
     const textTokens = tokenize(linkText);
@@ -661,7 +661,7 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
     }
   }
 
-  return { score, reason };
+  return { score: stale ? score - STALE_PENALTY : score, reason };
 }
 
 /**
