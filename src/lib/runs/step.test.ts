@@ -8,6 +8,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Row = Record<string, unknown>;
 
+/** The shape the extract mock takes and returns; `model` is null where the real one skips the model. */
+type ExtractMockInput = { url: string; text?: string; ctx: { runId: string } };
+type ExtractMockResult = {
+  findings: { fieldId: string; value: string; quote: string; url: string; source: string; confidence: number }[];
+  dropped: number;
+  usage: { inputTokens: number; outputTokens: number };
+  costUsd: number;
+  model: string | null;
+  summary: string;
+  businessNameGuess: string;
+};
+
 const h = vi.hoisted(() => {
   class DbError extends Error {
     readonly code: string | null;
@@ -163,7 +175,7 @@ const h = vi.hoisted(() => {
     bytes: 400,
   }));
 
-  const extractPage = vi.fn(async (input: { url: string; ctx: { runId: string } }) => {
+  const extractPage = vi.fn(async (input: ExtractMockInput): Promise<ExtractMockResult> => {
     state.llm.push({ run_id: input.ctx.runId, cost_usd: 0.001 });
     return {
       findings: [
@@ -197,7 +209,11 @@ vi.mock("server-only", () => ({}));
 vi.mock("./db", () => h.fake);
 vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => ({}) }));
 vi.mock("@/lib/storage", () => ({ putHtml: vi.fn(async () => "stored.html") }));
-vi.mock("@/lib/extract/page", () => ({ extractPage: h.extractPage, deterministicFindings: h.deterministicFindings }));
+vi.mock("@/lib/extract/page", () => ({
+  MIN_TEXT_CHARS: 40,
+  extractPage: h.extractPage,
+  deterministicFindings: h.deterministicFindings,
+}));
 vi.mock("@/lib/crawler", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/crawler")>();
   return { ...real, discoverSite: h.discoverSite, fetchPage: h.fetchPage };
@@ -489,7 +505,7 @@ describe("stepRun failures", () => {
 
   it("fails the run instead of writing an all-missing fact sheet when no page could be read for facts", async () => {
     seed({ run: { status: "running", phase: "merge" }, project: { latest_fact_sheet_id: "sheet-v1", status: "review" } });
-    addPage({ url: "https://acme.example.com/", rank: 0, status: "failed", findings: [] });
+    addPage({ url: "https://acme.example.com/", rank: 0, status: "failed", findings: [], text_chars: 4200 });
 
     const { run: view } = await stepRun(RUN, USER);
 
@@ -570,8 +586,8 @@ describe("stepRun and unusable model answers", () => {
 
   it("still treats a batch of failed requests as a step error", async () => {
     seed({ run: { status: "running", phase: "extract", pages_fetched: 2 } });
-    const a = addPage({ url: "https://acme.example.com/a", rank: 0, status: "fetched", text: "Page a text here" });
-    const b = addPage({ url: "https://acme.example.com/b", rank: 1, status: "fetched", text: "Page b text here" });
+    const a = addPage({ url: "https://acme.example.com/a", rank: 0, status: "fetched", text: "Page a has enough text to need a model call, well over forty characters." });
+    const b = addPage({ url: "https://acme.example.com/b", rank: 1, status: "fetched", text: "Page b has enough text to need a model call, well over forty characters." });
     Object.assign(run(), { cursor: { homeUrl: "https://acme.example.com/", extractQueue: [a, b] } });
     h.extractPage.mockImplementation(async () => {
       throw new Error("ANTHROPIC_API_KEY is not set");
@@ -582,5 +598,43 @@ describe("stepRun and unusable model answers", () => {
 
     expect((run().cursor as { errorCount?: number }).errorCount).toBe(1);
     expect(h.state.pages.get(a)!.status).toBe("fetched");
+  });
+});
+
+describe("stepRun when the model is down on a site with short pages", () => {
+  it("fails the run instead of replacing a reviewed sheet with one the model never read", async () => {
+    seed({
+      run: { status: "running", phase: "extract", pages_fetched: 4 },
+      project: { status: "review", latest_fact_sheet_id: "sheet-v1" },
+    });
+    const home = addPage({ url: "https://acme.example.com/", rank: 0, status: "fetched", text: "Acme Roofing is a family-run roofing company in Dayton. ".repeat(20), text_chars: 1100 });
+    const shells = ["/about", "/contact", "/services"].map((p, i) =>
+      addPage({ url: `https://acme.example.com${p}`, rank: i + 1, status: "fetched", text: "# About", text_chars: 7 }),
+    );
+    Object.assign(run(), { cursor: { homeUrl: "https://acme.example.com/", extractQueue: [home, ...shells] } });
+    // The real extractPage skips the model under 40 characters; the long page's call fails.
+    h.extractPage.mockImplementation(async (input: { url: string; text?: string }) => {
+      if ((input.text ?? "").length < 40) {
+        return { findings: [], dropped: 0, usage: { inputTokens: 0, outputTokens: 0 }, costUsd: 0, model: null, summary: "", businessNameGuess: "" };
+      }
+      throw new Error("Connection error.");
+    });
+
+    const finished = await stepUntilFinished();
+    h.extractPage.mockReset();
+
+    expect(finished.status).toBe("failed");
+    expect(h.state.sheets.size).toBe(0);
+    expect(project()).toMatchObject({ status: "review", latest_fact_sheet_id: "sheet-v1" });
+  });
+
+  it("writes the sheet when every page is a short shell, since there was nothing for the model to read", async () => {
+    seed({ run: { status: "running", phase: "merge" } });
+    addPage({ url: "https://acme.example.com/", rank: 0, status: "extracted", findings: [], text_chars: 12, extract_tokens_out: 0 });
+
+    const { run: view } = await stepRun(RUN, USER);
+
+    expect(view.status).toBe("done");
+    expect(h.state.sheets.size).toBe(1);
   });
 });

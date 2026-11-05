@@ -36,7 +36,7 @@ import {
 import type { CrawlRunRow, Json, ProjectRow, RunLogEntry } from "@/lib/db/types";
 import type { FactSheetData } from "@/lib/facts/types";
 import { mergeFindings } from "@/lib/extract/merge";
-import { deterministicFindings, extractPage, type ExtractPageResult } from "@/lib/extract/page";
+import { MIN_TEXT_CHARS, deterministicFindings, extractPage, type ExtractPageResult } from "@/lib/extract/page";
 import { StructuredCallError } from "@/lib/llm/client";
 import { runViewFromRow, type RunView } from "@/lib/projects/view";
 import { putHtml } from "@/lib/storage";
@@ -671,7 +671,9 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
   // as is a single page, so one flaky page at the end of the queue cannot fail the run.
   const rejected = [...outcomes.values()].filter((r): r is PromiseRejectedResult => r.status === "rejected");
   const requestFailures = rejected.filter((r) => !(r.reason instanceof StructuredCallError));
-  if (pages.length > 1 && requestFailures.length === pages.length) {
+  // Pages too short for a model call succeed without one, so they say nothing about an outage.
+  const needModel = pages.filter((p) => (p.text ?? "").trim().length >= MIN_TEXT_CHARS).length;
+  if (needModel > 1 && requestFailures.length === needModel) {
     throw new Error(`Extraction failed: ${errorText(rejected[0].reason)}`);
   }
 
@@ -749,9 +751,12 @@ async function mergeStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
   const spec = getTemplate(project.template_id);
 
   const pages = await q.loadPagesForMerge(db, run.id);
-  const modelPages = pages.filter((p) => p.status === "extracted").length;
-  if (modelPages === 0) {
-    // An all-missing fact sheet would read as "the site says nothing"; it is a failed scan.
+  // Pages the model actually read. A page too short for a model call is "extracted" without one.
+  const modelPages = pages.filter((p) => p.status === "extracted" && (p.extract_tokens_out ?? 0) > 0).length;
+  const readable = pages.some((p) => (p.text_chars ?? 0) >= MIN_TEXT_CHARS);
+  if (modelPages === 0 && readable) {
+    // The site has text but no page reached the model (an outage, a bad key): a fact sheet of
+    // JSON-LD and links alone would read as "the site says nothing", so it is a failed scan.
     return failRun(ctx, run, "The facts could not be read from any page. Run the scan again in a few minutes.");
   }
 
@@ -777,7 +782,7 @@ async function mergeStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
     phase: "done",
     status: "done",
     finished_at: finishedAt,
-    pages_extracted: modelPages,
+    pages_extracted: pages.filter((p) => p.status === "extracted").length,
     cursor: completed(cursorOf(run)),
     log: appendLog(run.log, "info", factSheetReadyMessage(stats), finishedAt),
   });

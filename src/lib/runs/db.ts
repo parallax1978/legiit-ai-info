@@ -247,14 +247,17 @@ export async function runLlmCosts(db: Db, runId: string): Promise<{ cost_usd: nu
   return must("read run cost", await db.from("llm_calls").select("cost_usd").eq("run_id", runId));
 }
 
-export type PageForMerge = Pick<CrawlPageRow, "id" | "url" | "status" | "findings" | "findings_dropped" | "jsonld">;
+export type PageForMerge = Pick<
+  CrawlPageRow,
+  "id" | "url" | "status" | "findings" | "findings_dropped" | "jsonld" | "text_chars" | "extract_tokens_out"
+>;
 
 export async function loadPagesForMerge(db: Db, runId: string): Promise<PageForMerge[]> {
   return must(
     "load pages",
     await db
       .from("crawl_pages")
-      .select("id, url, status, findings, findings_dropped, jsonld")
+      .select("id, url, status, findings, findings_dropped, jsonld, text_chars, extract_tokens_out")
       .eq("run_id", runId)
       .order("rank", { ascending: true }),
   );
