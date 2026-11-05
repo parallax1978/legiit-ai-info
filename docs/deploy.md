@@ -7,10 +7,13 @@ Three services: Supabase (database, auth, storage), Vercel (the app), Anthropic
 
 1. Create a project. Note the project URL, the publishable (or anon) key, and the
    secret (or service_role) key from Project Settings > API.
-2. Apply `supabase/migrations/0001_init.sql` in the SQL editor (or `supabase db
-   push` with the CLI). It creates every table with RLS, the trigger that makes a
-   `profiles` row for each new auth user, and the private `crawl-html` and
-   `exports` storage buckets.
+2. Apply every file in `supabase/migrations` in order, in the SQL editor or with
+   `supabase db push`. `0001_init.sql` creates every table with RLS, the trigger
+   that makes a `profiles` row for each new auth user, and the private
+   `crawl-html` and `exports` storage buckets. `0002_tighten_rls.sql` is not
+   optional: it revokes writes from the browser key, without which a signed-in
+   user could set their own plan to paid. `pnpm db:check` runs the same
+   migrations and the RLS checks against a local PostgreSQL (see CLAUDE.md).
 3. Authentication > URL Configuration: set the Site URL to the app's origin and
    add `https://<your-domain>/auth/callback?*` and
    `http://localhost:3000/auth/callback?*` to the redirect allow-list. The magic
@@ -38,6 +41,10 @@ Three services: Supabase (database, auth, storage), Vercel (the app), Anthropic
    work after 20 seconds and the lock lease is 70 seconds, so a function killed at
    the ceiling cannot overlap the retry.
 4. Deploy. `/api/health` answers `{ ok: true }`.
+
+Usage caps arrive in slice 5. Until then any signed-in account can start scans
+without a limit, and each scan spends Haiku tokens on up to 40 pages. Keep the
+site unlisted, or watch `llm_calls`, until the caps ship.
 
 ## 3. First run checklist
 

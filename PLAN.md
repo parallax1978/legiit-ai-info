@@ -238,6 +238,18 @@ A live crawl of five real sites (WordPress, Shopify, Webflow, a client-rendered
 app, Next.js) fixed the page ranking: keyword position, home page links, and
 probes for key pages a client-rendered site never links.
 
+A final review (11 findings) closed the rest:
+- DNS rebinding: the socket's own lookup now refuses private addresses, so the
+  address checked is the address connected to. A test serves a rebinding
+  answer in front of a real local server and asserts it is never reached.
+- Ranking: WordPress plain-permalink pages (`/?page_id=2`) are crawled, and
+  stale copies are judged by folder or by a live sibling, not by words in a
+  slug.
+- Run machine: a model outage on a site with short pages fails the scan rather
+  than replacing a reviewed sheet, and a scan is counted before the project
+  points at it.
+- Review screen: an address part edited before switching to one line is kept.
+
 **Not yet verified end to end.** There was no Supabase project or Anthropic key
 in the build environment, so the magic link, a real scan, and Haiku's actual
 output have not run together. The PostgREST request shapes were checked against
@@ -246,8 +258,7 @@ and the crawler against live sites. The first deploy should run one scan on a
 known site and read crawl_runs.log and llm_calls (see docs/deploy.md).
 
 **Open items for later slices**
-- Usage caps on POST /api/projects (slice 5).
+- Usage caps on POST /api/projects and POST /api/projects/[id]/runs (slice 5).
+  The usage events they will count are already written. Until the caps ship,
+  any signed-in account can start scans without a limit.
 - Manual mode and the guided question flow (slice 2).
-- DNS rebinding: the crawler checks a host's addresses before it connects, but
-  the connection does its own lookup. Low risk on Vercel (no metadata service
-  or private network); revisit if the app moves to a VPC.
