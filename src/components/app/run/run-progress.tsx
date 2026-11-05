@@ -56,12 +56,14 @@ export function RunProgress({ initial }: { initial: RunView }) {
       while (!signal.aborted && !isRunFinished(runRef.current)) {
         try {
           const result = await stepRun(runRef.current.id, { signal });
-          failures = 0;
           if (result.locked) {
+            // Another step holds the lock. Not a success: a step that keeps dying at the
+            // time limit shows up as 504s between 409s, and those still have to add up.
             if (result.run) update(result.run);
             await sleep(RETRY_DELAY_MS, signal);
             continue;
           }
+          failures = 0;
           update(result.run);
         } catch (e) {
           if (signal.aborted) return;

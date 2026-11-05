@@ -45,46 +45,68 @@ export async function createRun(
 
   const homeUrl = homeUrlOf(project);
   const cursor: StepCursor = { homeUrl, errorCount: 0 };
+  // Inserted at discover even when pages will be reused: the run only moves to
+  // extract once its pages and queue are in place, so a half-made reuse run can
+  // never be stepped into an empty merge.
   let run = await q.insertRun(db, {
     project_id: project.id,
     user_id: userId,
     status: "queued",
-    phase: source ? "extract" : "discover",
+    phase: "discover",
     cursor,
     log: [],
   });
 
-  if (source) {
-    const sourceRun = await q.getRun(db, source.runId);
-    const rows = await q.insertPages(
-      db,
-      source.pages.map((page) => reusedPageRow(page, { runId: run.id, projectId: project.id, userId }, now)),
-    );
-    const extractQueue = [...rows].sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id)).map((r) => r.id);
-    const textBytes = source.pages.reduce((n, p) => n + utf8Bytes(p.text ?? ""), 0);
-    const n = rows.length;
-    run = await q.updateRun(db, run.id, {
-      cursor: {
-        ...cursor,
-        homeUrl: sourceRun?.cursor?.homeUrl ?? homeUrl,
-        usedSitemap: sourceRun?.cursor?.usedSitemap ?? true,
-        queue: [],
-        seen: source.pages.map((p) => p.url),
-        nextRank: n,
-        extractQueue,
-      },
-      pages_planned: n,
-      pages_fetched: n,
-      text_bytes: textBytes,
-      platform: sourceRun?.platform ?? "unknown",
-      platform_evidence: sourceRun?.platform_evidence ?? [],
-      robots: sourceRun?.robots ?? null,
-      sitemaps: sourceRun?.sitemaps ?? [],
-      log: appendLog([], "info", `Reusing ${n} ${n === 1 ? "page" : "pages"} from the last scan`, now),
-    });
+  try {
+    if (source) run = await copyPages(db, run, project, userId, source, homeUrl, cursor, now);
+    await q.updateProject(db, project.id, { latest_crawl_run_id: run.id, status: "crawling" });
+    await q.insertUsageEvent(db, userId, project.id, "crawl_started");
+  } catch (e) {
+    // Nothing should step a run that was not set up; mark it failed and report the error.
+    await q
+      .updateRun(db, run.id, { status: "failed", phase: "failed", error: "The scan could not be started.", finished_at: now })
+      .catch(() => undefined);
+    throw e;
   }
-
-  await q.updateProject(db, project.id, { latest_crawl_run_id: run.id, status: "crawling" });
-  await q.insertUsageEvent(db, userId, project.id, "crawl_started");
   return run;
+}
+
+async function copyPages(
+  db: q.Db,
+  run: CrawlRunRow,
+  project: ProjectRow,
+  userId: string,
+  source: { runId: string; pages: q.ReusablePageRow[] },
+  homeUrl: string,
+  cursor: StepCursor,
+  now: string,
+): Promise<CrawlRunRow> {
+  const sourceRun = await q.getRun(db, source.runId);
+  const rows = await q.insertPages(
+    db,
+    source.pages.map((page) => reusedPageRow(page, { runId: run.id, projectId: project.id, userId }, now)),
+  );
+  const extractQueue = [...rows].sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id)).map((r) => r.id);
+  const textBytes = source.pages.reduce((n, p) => n + utf8Bytes(p.text ?? ""), 0);
+  const n = rows.length;
+  return q.updateRun(db, run.id, {
+    phase: "extract",
+    cursor: {
+      ...cursor,
+      homeUrl: sourceRun?.cursor?.homeUrl ?? homeUrl,
+      usedSitemap: sourceRun?.cursor?.usedSitemap ?? true,
+      queue: [],
+      seen: source.pages.map((p) => p.url),
+      nextRank: n,
+      extractQueue,
+    },
+    pages_planned: n,
+    pages_fetched: n,
+    text_bytes: textBytes,
+    platform: sourceRun?.platform ?? "unknown",
+    platform_evidence: sourceRun?.platform_evidence ?? [],
+    robots: sourceRun?.robots ?? null,
+    sitemaps: sourceRun?.sitemaps ?? [],
+    log: appendLog([], "info", `Reusing ${n} ${n === 1 ? "page" : "pages"} from the last scan`, now),
+  });
 }

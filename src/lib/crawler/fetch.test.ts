@@ -1,7 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { fetchPage, fetchText } from "./fetch";
+import { fetchPage, fetchText, requestTimeout } from "./fetch";
 
 const opts = { userAgent: "LegiitAiInfoBot/0.1", timeoutMs: 1000, maxBytes: 100_000 };
+
+type Route = () => Response;
+
+function html(body: string): Route {
+  return () => new Response(body, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
+function redirect(location: string, status = 301): Route {
+  return () => new Response(null, { status, headers: { location } });
+}
+
+/** A stub fetch that serves fixed routes and records every URL it was asked for. */
+function routes(table: Record<string, Route>): { fetchImpl: typeof fetch; requested: string[] } {
+  const requested: string[] = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    requested.push(url);
+    expect(init?.redirect).toBe("manual");
+    const route = table[url];
+    return route ? route() : new Response("nope", { status: 404 });
+  };
+  return { fetchImpl, requested };
+}
 
 function respond(body: string, init: ResponseInit & { url?: string } = {}): typeof fetch {
   return async () => {
@@ -67,15 +90,24 @@ describe("fetchPage", () => {
     expect(r.bytes).toBe(body.length);
   });
 
-  it("treats an off-site redirect as skipped", async () => {
-    const r = await fetchPage("https://example.com/", { ...opts, fetchImpl: respond("<html></html>", { url: "https://parked.example.net/" }) });
+  it("treats an off-site redirect as skipped without requesting it", async () => {
+    const { fetchImpl, requested } = routes({
+      "https://example.com/": redirect("https://parked.example.net/"),
+      "https://parked.example.net/": html("<html>parked</html>"),
+    });
+    const r = await fetchPage("https://example.com/", { ...opts, fetchImpl });
     expect(r.ok).toBe(false);
     expect(r.redirectedOffSite).toBe(true);
     expect(r.html).toBeNull();
+    expect(requested).toEqual(["https://example.com/"]);
   });
 
   it("accepts a www redirect as the same site", async () => {
-    const r = await fetchPage("https://example.com/about", { ...opts, fetchImpl: respond("<html></html>", { url: "https://www.example.com/about/" }) });
+    const { fetchImpl } = routes({
+      "https://example.com/about": redirect("https://www.example.com/about/"),
+      "https://www.example.com/about/": html("<html>about</html>"),
+    });
+    const r = await fetchPage("https://example.com/about", { ...opts, fetchImpl });
     expect(r.ok).toBe(true);
     expect(r.finalUrl).toBe("https://www.example.com/about/");
   });
@@ -106,5 +138,106 @@ describe("fetchText", () => {
     const fetchImpl: typeof fetch = async () => new Response(bytes, { headers: { "content-type": "text/plain; charset=iso-8859-1" } });
     const r = await fetchText("https://example.com/x.txt", { ...opts, fetchImpl, accept: "text/plain" });
     expect(r.text).toBe("café");
+  });
+});
+
+describe("the SSRF guard", () => {
+  it("never requests a redirect hop that points at a private address", async () => {
+    const { fetchImpl, requested } = routes({
+      "https://example.com/sitemap.xml": redirect("http://169.254.169.254/latest/meta-data/"),
+    });
+    const r = await fetchText("https://example.com/sitemap.xml", { ...opts, fetchImpl, allowOffSite: true });
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("redirected to a private or local host");
+    expect(r.status).toBe(0);
+    expect(requested).toEqual(["https://example.com/sitemap.xml"]);
+  });
+
+  it("refuses IPv4-mapped IPv6 hops in the hex form the URL parser produces", async () => {
+    const { fetchImpl, requested } = routes({
+      "https://example.com/": redirect("http://[::ffff:127.0.0.1]:8080/admin"),
+    });
+    const r = await fetchText("https://example.com/", { ...opts, fetchImpl, allowOffSite: true });
+    expect(r.error).toBe("redirected to a private or local host");
+    expect(requested).toHaveLength(1);
+  });
+
+  it("checks every hop, not only the last one", async () => {
+    const { fetchImpl, requested } = routes({
+      "https://example.com/a": redirect("https://example.com/b"),
+      "https://example.com/b": redirect("http://10.0.0.5/do-something"),
+      "http://10.0.0.5/do-something": redirect("https://example.com/ok"),
+      "https://example.com/ok": html("<html>ok</html>"),
+    });
+    const r = await fetchPage("https://example.com/a", { ...opts, fetchImpl });
+    expect(r.ok).toBe(false);
+    expect(requested).toEqual(["https://example.com/a", "https://example.com/b"]);
+  });
+
+  it("refuses a host whose DNS points at a private address", async () => {
+    const { fetchImpl, requested } = routes({ "https://internal.example.com/": html("<html>secret</html>") });
+    const r = await fetchPage("https://internal.example.com/", {
+      ...opts,
+      fetchImpl,
+      resolveHost: async () => ["93.184.216.34", "10.0.0.5"],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("private");
+    expect(requested).toEqual([]);
+  });
+
+  it("allows a host with public IPv4 and IPv6 addresses", async () => {
+    const { fetchImpl } = routes({ "https://example.com/": html("<html>hi</html>") });
+    const r = await fetchPage("https://example.com/", {
+      ...opts,
+      fetchImpl,
+      resolveHost: async () => ["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"],
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("reports a host that does not resolve without requesting it", async () => {
+    const { fetchImpl, requested } = routes({});
+    const r = await fetchPage("https://nowhere.example.com/", {
+      ...opts,
+      fetchImpl,
+      resolveHost: async () => {
+        throw new Error("getaddrinfo ENOTFOUND nowhere.example.com");
+      },
+    });
+    expect(r.error).toBe("the host name did not resolve");
+    expect(requested).toEqual([]);
+  });
+
+  it("stops after too many redirects", async () => {
+    const table: Record<string, Route> = {};
+    for (let i = 0; i < 10; i++) table[`https://example.com/${i}`] = redirect(`https://example.com/${i + 1}`);
+    const { fetchImpl, requested } = routes(table);
+    const r = await fetchPage("https://example.com/0", { ...opts, fetchImpl });
+    expect(r.error).toBe("too many redirects");
+    expect(requested).toHaveLength(6);
+  });
+
+  it("does not start a request past the deadline", async () => {
+    const { fetchImpl, requested } = routes({ "https://example.com/": html("<html></html>") });
+    const r = await fetchPage("https://example.com/", { ...opts, fetchImpl, deadline: Date.now() + 200 });
+    expect(r.error).toBe("out of time for this step");
+    expect(requested).toEqual([]);
+  });
+
+  it("cuts the timeout to fit before the deadline", () => {
+    expect(requestTimeout({ timeoutMs: 10_000, deadline: 105_000 }, 100_000)).toBe(5_000);
+    expect(requestTimeout({ timeoutMs: 10_000, deadline: 200_000 }, 100_000)).toBe(10_000);
+    expect(requestTimeout({ timeoutMs: 10_000 }, 100_000)).toBe(10_000);
+  });
+
+  it("keeps addresses out of connection errors", async () => {
+    const refused: typeof fetch = async () => {
+      throw Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("connect ECONNREFUSED 203.0.113.7:5432"), { code: "ECONNREFUSED" }),
+      });
+    };
+    const r = await fetchPage("https://example.com/", { ...opts, fetchImpl: refused });
+    expect(r.error).toBe("could not connect (ECONNREFUSED)");
   });
 });

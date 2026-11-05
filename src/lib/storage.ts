@@ -9,8 +9,11 @@ import { createServiceClient, type ServiceClient } from "@/lib/supabase/service"
 
 export const HTML_BUCKET = "crawl-html";
 
-/** Storage calls go through fetch with no timeout of their own, so one is added here. */
-const STORAGE_TIMEOUT_MS = 15_000;
+/**
+ * Storage calls go through fetch with no timeout of their own, so one is added
+ * here. Short, because uploads run inside a fetch step's time budget.
+ */
+const STORAGE_TIMEOUT_MS = 8_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {

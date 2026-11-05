@@ -109,3 +109,37 @@ describe("discoverSitemapUrls", () => {
     expect(result).toEqual({ urls: [], sitemapsRead: [] });
   });
 });
+
+describe("discoverSitemapUrls with a deadline", () => {
+  it("stops walking when the deadline passes and keeps what it found", async () => {
+    const urlset = (paths: string[]) =>
+      `<urlset>${paths.map((p) => `<url><loc>https://example.com${p}</loc></url>`).join("")}</urlset>`;
+    const index = `<sitemapindex>${Array.from({ length: 8 }, (_, i) => `<sitemap><loc>https://example.com/page-sitemap${i}.xml</loc></sitemap>`).join("")}</sitemapindex>`;
+    let clock = 0;
+    const deadline = 10_000;
+    const realNow = Date.now;
+    Date.now = () => clock;
+    try {
+      const fetchImpl: typeof fetch = async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        clock += 3_000; // every sitemap takes three seconds
+        if (url.endsWith("/sitemap.xml")) return new Response(index, { headers: { "content-type": "application/xml" } });
+        const n = /page-sitemap(\d)/.exec(url)?.[1] ?? "x";
+        return new Response(urlset([`/page-${n}`]), { headers: { "content-type": "application/xml" } });
+      };
+      const result = await discoverSitemapUrls("https://example.com", [], {
+        userAgent: "LegiitAiInfoBot/0.1",
+        timeoutMs: 10_000,
+        maxSitemaps: 12,
+        maxUrls: 100,
+        fetchImpl,
+        deadline,
+      });
+      expect(result.sitemapsRead.length).toBeLessThan(9);
+      expect(result.urls.length).toBeGreaterThan(0);
+      expect(clock).toBeLessThanOrEqual(deadline + 3_000);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+});

@@ -33,3 +33,16 @@ begin
   end if;
 end
 $$;
+
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin bypassrls;
+  end if;
+end
+$$;
+
+-- Supabase grants table privileges to these roles by default; mirror that so
+-- the revokes and policies in the migrations are exercised.
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+grant usage on schema public to anon, authenticated, service_role;

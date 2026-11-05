@@ -47,8 +47,59 @@ export function isIpLiteral(hostname: string): boolean {
 }
 
 /**
+ * The eight 16-bit groups of an IPv6 address, or null when it is not one.
+ * Handles "::" compression, a zone suffix ("%eth0"), and an embedded IPv4
+ * tail ("::ffff:1.2.3.4"). The WHATWG URL parser rewrites the dotted tail to
+ * hex ("::ffff:7f00:1"), so both spellings must classify the same.
+ */
+export function parseIpv6(input: string): number[] | null {
+  let h = input.toLowerCase().replace(/^\[|\]$/g, "").replace(/%.*$/, "");
+  if (!h.includes(":")) return null;
+  const tail4 = /^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/.exec(h);
+  if (tail4) {
+    const v4 = parseIpv4(tail4[2]);
+    if (!v4) return null;
+    h = `${tail4[1]}${((v4[0] << 8) | v4[1]).toString(16)}:${((v4[2] << 8) | v4[3]).toString(16)}`;
+  }
+  if (!/^[0-9a-f:]+$/.test(h)) return null;
+  const halves = h.split("::");
+  if (halves.length > 2) return null;
+  const groupsOf = (part: string) => (part ? part.split(":") : []);
+  const head = groupsOf(halves[0]);
+  const tail = halves.length === 2 ? groupsOf(halves[1]) : [];
+  if ([...head, ...tail].some((g) => g.length === 0 || g.length > 4)) return null;
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
+  const groups = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill("0"), ...tail].map((g) =>
+    parseInt(g, 16),
+  );
+  return groups.length === 8 && groups.every((n) => Number.isInteger(n) && n >= 0 && n <= 0xffff) ? groups : null;
+}
+
+function isPrivateIpv6(g: number[]): boolean {
+  const v4At = (i: number) => [g[i] >> 8, g[i] & 0xff, g[i + 1] >> 8, g[i + 1] & 0xff];
+  const zeroThrough = (n: number) => g.slice(0, n).every((x) => x === 0);
+  if (zeroThrough(8)) return true; // ::
+  if (zeroThrough(7) && g[7] === 1) return true; // ::1
+  if (zeroThrough(5) && g[5] === 0xffff) return isPrivateIpv4(v4At(6)); // ::ffff:a.b.c.d, IPv4-mapped
+  if (zeroThrough(4) && g[4] === 0xffff && g[5] === 0) return isPrivateIpv4(v4At(6)); // ::ffff:0:a.b.c.d
+  if (zeroThrough(6)) return isPrivateIpv4(v4At(6)); // ::a.b.c.d, IPv4-compatible
+  if (g[0] === 0x64 && g[1] === 0xff9b) return true; // NAT64
+  if (g[0] === 0x0100 && g[1] === 0 && g[2] === 0 && g[3] === 0) return true; // discard
+  if (g[0] === 0x2001 && g[1] === 0x0db8) return true; // documentation
+  if (g[0] === 0x2001 && g[1] === 0) return true; // Teredo
+  if (g[0] === 0x2002) return isPrivateIpv4(v4At(1)); // 6to4 wraps an IPv4 address
+  if ((g[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+  if ((g[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((g[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local
+  if ((g[0] & 0xff00) === 0xff00) return true; // multicast
+  return false;
+}
+
+/**
  * True for hosts a crawler must never be pointed at: loopback, link-local,
- * private ranges, cloud metadata, and local-only names. The SSRF guard.
+ * private ranges, cloud metadata, and local-only names. The SSRF guard. Takes
+ * a URL hostname or a bare address from a DNS lookup.
  */
 export function isPrivateHost(hostname: string): boolean {
   const host = cleanHost(hostname);
@@ -60,17 +111,9 @@ export function isPrivateHost(hostname: string): boolean {
   if (v4) return isPrivateIpv4(v4);
 
   if (host.includes(":")) {
-    const v6 = host.toLowerCase();
-    if (v6 === "::" || v6 === "::1") return true;
-    const mapped = /^(?:0*:)*ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(v6);
-    if (mapped) {
-      const inner = parseIpv4(mapped[1]);
-      return inner ? isPrivateIpv4(inner) : true;
-    }
-    if (/^f[cd]/.test(v6)) return true; // fc00::/7 unique local
-    if (/^fe[89ab]/.test(v6)) return true; // fe80::/10 link-local
-    if (/^64:ff9b:/.test(v6)) return true; // NAT64
-    return false;
+    const v6 = parseIpv6(host);
+    // Anything with a colon that does not parse as IPv6 is refused rather than guessed at.
+    return v6 ? isPrivateIpv6(v6) : true;
   }
   return false;
 }

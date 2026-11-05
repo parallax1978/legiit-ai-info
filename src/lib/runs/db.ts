@@ -107,6 +107,22 @@ export async function updateRun(db: Db, runId: string, patch: CrawlRunUpdate): P
 }
 
 /**
+ * Writes the run only while the given lock token still holds it. Null when the
+ * lease was lost (another caller took the lock): the caller must stop.
+ */
+export async function updateRunLocked(
+  db: Db,
+  runId: string,
+  token: string,
+  patch: CrawlRunUpdate,
+): Promise<CrawlRunRow | null> {
+  return maybe(
+    "update run",
+    await db.from("crawl_runs").update(patch).eq("id", runId).eq("lock_token", token).select().maybeSingle(),
+  );
+}
+
+/**
  * Takes the run lock when it is free or its lease has expired. Returns the
  * locked row, or null when another caller holds it.
  */
@@ -152,19 +168,35 @@ export async function insertPages(db: Db, rows: CrawlPageInsert[]): Promise<Page
   return must("insert pages", await db.from("crawl_pages").insert(rows).select("id, url, normalized_url, rank"));
 }
 
+/**
+ * Inserts page rows, skipping any (run_id, normalized_url) that already exists.
+ * Returns only the rows it inserted, so a retried step cannot trip the unique
+ * constraint on pages an earlier try wrote.
+ */
+export async function insertNewPages(db: Db, rows: CrawlPageInsert[]): Promise<PageRef[]> {
+  if (!rows.length) return [];
+  return must(
+    "insert pages",
+    await db
+      .from("crawl_pages")
+      .upsert(rows, { onConflict: "run_id,normalized_url", ignoreDuplicates: true })
+      .select("id, url, normalized_url, rank"),
+  );
+}
+
 export async function deletePagesForRun(db: Db, runId: string): Promise<void> {
   check("delete pages", await db.from("crawl_pages").delete().eq("run_id", runId));
 }
 
-export type PageForFetch = PageRef & Pick<CrawlPageRow, "status">;
+export type PageForFetch = PageRef & Pick<CrawlPageRow, "status" | "reason" | "text_chars">;
 
-/** Every page row of the run with its status, so a retried fetch step can skip what an earlier try wrote. */
+/** Every page row of the run with its status, so a retried fetch step rebuilds its work from the rows. */
 export async function listPagesForFetch(db: Db, runId: string): Promise<PageForFetch[]> {
   return must(
     "list pages",
     await db
       .from("crawl_pages")
-      .select("id, url, normalized_url, rank, status")
+      .select("id, url, normalized_url, rank, status, reason, text_chars")
       .eq("run_id", runId)
       .order("rank", { ascending: true }),
   );
@@ -185,7 +217,18 @@ export async function listPagesForOrder(db: Db, runId: string): Promise<PageForO
 
 export type PageForExtract = Pick<
   CrawlPageRow,
-  "id" | "url" | "rank" | "title" | "meta_description" | "canonical" | "lang" | "text" | "jsonld" | "links" | "images"
+  | "id"
+  | "url"
+  | "rank"
+  | "status"
+  | "title"
+  | "meta_description"
+  | "canonical"
+  | "lang"
+  | "text"
+  | "jsonld"
+  | "links"
+  | "images"
 >;
 
 export async function loadPagesForExtract(db: Db, ids: string[]): Promise<PageForExtract[]> {
@@ -194,9 +237,14 @@ export async function loadPagesForExtract(db: Db, ids: string[]): Promise<PageFo
     "load pages",
     await db
       .from("crawl_pages")
-      .select("id, url, rank, title, meta_description, canonical, lang, text, jsonld, links, images")
+      .select("id, url, rank, status, title, meta_description, canonical, lang, text, jsonld, links, images")
       .in("id", ids),
   );
+}
+
+/** What the run's model calls cost, from llm_calls: failed and refused calls are billed too. */
+export async function runLlmCosts(db: Db, runId: string): Promise<{ cost_usd: number }[]> {
+  return must("read run cost", await db.from("llm_calls").select("cost_usd").eq("run_id", runId));
 }
 
 export type PageForMerge = Pick<CrawlPageRow, "id" | "url" | "status" | "findings" | "findings_dropped" | "jsonld">;
@@ -282,6 +330,15 @@ export async function maxFactSheetVersion(db: Db, projectId: string): Promise<nu
       .maybeSingle(),
   );
   return row?.version ?? 0;
+}
+
+/** The fact sheet a run already wrote, if any (fact_sheets.crawl_run_id is unique). */
+export async function factSheetIdForRun(db: Db, runId: string): Promise<string | null> {
+  const row = maybe(
+    "read fact sheet",
+    await db.from("fact_sheets").select("id").eq("crawl_run_id", runId).limit(1).maybeSingle(),
+  );
+  return row?.id ?? null;
 }
 
 export async function insertFactSheet(db: Db, row: FactSheetInsert): Promise<string> {

@@ -6,13 +6,17 @@
 */
 import { mergePlatformEvidence, type PlatformDetection } from "@/lib/crawler/platform";
 import { urlKey } from "@/lib/crawler/url";
+import type { RankedUrl } from "@/lib/crawler/url";
 import type {
   CrawlPageRow,
   JsonLdBlock,
   PlatformEvidence,
   PlatformT,
+  ProjectRow,
+  ProjectStatusT,
   RunCursor,
   RunLogEntry,
+  RunPhaseT,
   RunStatusT,
 } from "@/lib/db/types";
 import type { FactSheetData, FactSheetStats } from "@/lib/facts/types";
@@ -253,4 +257,114 @@ export function reusedPageRow(
     findings_dropped: 0,
     error: null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Attempts and time
+// ---------------------------------------------------------------------------
+
+const PHASE_WORDS: Record<RunPhaseT, string> = {
+  discover: "finding the pages",
+  fetch: "reading the pages",
+  extract: "pulling the facts",
+  merge: "putting the fact sheet together",
+  done: "finishing",
+  failed: "finishing",
+};
+
+/** Why a run failed when its steps kept being cut off before they finished. */
+export function stalledMessage(phase: RunPhaseT): string {
+  return `The scan kept running out of time while ${PHASE_WORDS[phase]}. Try it again later.`;
+}
+
+/** True when a step has run long enough that its lock lease may have passed to another caller. */
+export function leaseAtRisk(startedMs: number, nowMs: number, leaseMs: number, marginMs = 5_000): boolean {
+  return nowMs - startedMs > leaseMs - marginMs;
+}
+
+// ---------------------------------------------------------------------------
+// Fetch state
+// ---------------------------------------------------------------------------
+
+export type PageRowForFetch = Pick<
+  CrawlPageRow,
+  "id" | "url" | "normalized_url" | "rank" | "status" | "reason" | "text_chars"
+>;
+
+export type FetchState = {
+  /** Pages still to fetch, in rank order. */
+  queue: RankedUrl[];
+  /** Every URL planned so far, for the link dedupe. */
+  seen: string[];
+  planned: number;
+  fetched: number;
+  failed: number;
+  nextRank: number;
+  /** Characters of stored text, a lower bound on its bytes. */
+  textChars: number;
+};
+
+const READ = new Set(["fetched", "extracted"]);
+
+/**
+ * The fetch phase's work rebuilt from the page rows instead of trusted from
+ * the cursor. A step that died after writing rows but before saving the
+ * cursor leaves pages it already fetched (skipped here) and queued rows for
+ * links it found (added here). Rows decide what is left; the cursor only
+ * contributes order and reasons.
+ */
+export function reconcileFetchState(cursor: Pick<RunCursor, "queue" | "seen">, rows: PageRowForFetch[]): FetchState {
+  const byKey = new Map(rows.map((r) => [r.normalized_url, r]));
+  const queue: RankedUrl[] = [];
+  const queued = new Set<string>();
+
+  for (const entry of cursor.queue ?? []) {
+    const key = pageKey(entry.url);
+    const row = byKey.get(key);
+    if ((row && row.status !== "queued") || queued.has(key)) continue;
+    queued.add(key);
+    queue.push(row ? { url: row.url, rank: row.rank, reason: entry.reason } : entry);
+  }
+  for (const row of rows) {
+    if (row.status !== "queued" || queued.has(row.normalized_url)) continue;
+    queued.add(row.normalized_url);
+    queue.push({ url: row.url, rank: row.rank, reason: row.reason ?? "linked from a page" });
+  }
+  queue.sort((a, b) => a.rank - b.rank);
+
+  const seen = new Set<string>(cursor.seen ?? []);
+  for (const row of rows) seen.add(row.url);
+  for (const entry of queue) seen.add(entry.url);
+
+  const planned = new Set<string>([...byKey.keys(), ...queued]);
+  const ranks = [...rows.map((r) => r.rank), ...queue.map((e) => e.rank)];
+  return {
+    queue,
+    seen: [...seen],
+    planned: planned.size,
+    fetched: rows.filter((r) => READ.has(r.status)).length,
+    failed: rows.filter((r) => r.status === "failed").length,
+    nextRank: (ranks.length ? Math.max(...ranks) : -1) + 1,
+    textChars: rows.reduce((n, r) => n + (READ.has(r.status) ? (r.text_chars ?? 0) : 0), 0),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Project pointers
+// ---------------------------------------------------------------------------
+
+/** A run updates the project only while it is the project's latest run. */
+export function runOwnsProject(project: Pick<ProjectRow, "latest_crawl_run_id">, runId: string): boolean {
+  return !project.latest_crawl_run_id || project.latest_crawl_run_id === runId;
+}
+
+/** After a failed run, a project that still has a fact sheet stays in review. */
+export function projectStatusAfterFailure(project: Pick<ProjectRow, "latest_fact_sheet_id">): ProjectStatusT {
+  return project.latest_fact_sheet_id ? "review" : "failed";
+}
+
+/** Total of a list of llm_calls costs, rounded to the column's six decimals. */
+export function sumCost(rows: { cost_usd: number | string | null }[]): number {
+  const total = rows.reduce((n, r) => n + Number(r.cost_usd ?? 0), 0);
+  return Math.round(total * 1_000_000) / 1_000_000;
 }

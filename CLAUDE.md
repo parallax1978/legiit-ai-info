@@ -13,7 +13,7 @@ pnpm build        # production build; must pass before a commit
 pnpm typecheck    # tsc --noEmit
 pnpm lint         # eslint
 pnpm test         # vitest run
-pnpm db:check     # apply migrations to a local PostgreSQL (needs a running server, see below)
+pnpm db:check     # apply migrations to a local PostgreSQL and run the RLS checks (needs a running server, see below)
 ```
 
 Local migration check: start PostgreSQL 16 on port 54329 with trust auth, create a
@@ -45,7 +45,19 @@ stands in for the `auth` and `storage` schemas Supabase manages.
   may use the service client for writes.
 - Long jobs are stepped: `POST /api/runs/[id]/step` does one bounded unit of
   work and returns the run. `export const maxDuration = 60` on those routes.
-- Every external fetch has a timeout (`AbortSignal.timeout`).
+- Inside a step (src/lib/runs/step.ts): run writes go through `writeRun`, which
+  is conditional on the lock token; page writes call `assertLease` first. The
+  attempt counter is written before any work, so a step killed at the ceiling
+  still counts. Work is rebuilt from the rows, never trusted from the cursor
+  alone. No request starts after `config.crawl.stepDeadlineMs`.
+- Every external fetch has a timeout (`AbortSignal.timeout`) and goes through
+  `src/lib/crawler/fetch.ts`, which follows redirects by hand and checks every
+  hop and the host's DNS addresses against `isPrivateHost` before requesting it.
+- The session client only reads. Every write goes through a route handler that
+  checks ownership and then uses the service client; migration 0002 revokes
+  session-client writes so this cannot be bypassed with the publishable key.
+  `pnpm db:check` runs `supabase/test/rls_check.sql`, which fails if a user can
+  write their own plan, projects, or fact sheets.
 - Every LLM call goes through `callStructured` so model, tokens, cost, and
   duration land in `llm_calls`.
 - Never let the extractor set a field without a verbatim quote. The quote must be
@@ -73,5 +85,17 @@ stands in for the `auth` and `storage` schemas Supabase manages.
   share caps. All in `src/config.ts`.
 - Model IDs confirmed on platform.claude.com on 2026-11-05: `claude-haiku-5-5`
   for extraction, `claude-sonnet-5-5` for writing.
+- Lock lease 70 s, longer than the 60 s function ceiling, so a killed step can
+  never overlap the next one. A phase slice that is cut off five times in a row
+  fails the run with a plain message instead of retrying forever.
+- A failed re-run leaves a project that already has a fact sheet in review; only
+  a project with nothing to fall back on is marked failed. Only a project's
+  latest run moves its pointers.
+- A run whose pages all failed extraction fails rather than producing an
+  all-missing fact sheet. Pages whose model call failed still keep their
+  JSON-LD, link, and canonical findings.
+- Cost and usage history outlive a deleted project (`on delete set null`), so
+  the cost dashboard stays complete and deleting a project does not hand back
+  its monthly allowance.
 - The wordmark renders as "Legiit" + "Ai Info" with no space before "Ai", the way
   legiitkeywords.com renders "LegiitKeywords". One character to change if wanted.

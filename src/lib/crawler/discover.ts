@@ -3,6 +3,7 @@
   queue, plus the helper the fetch phase uses to grow the queue from on-page
   links when there is no sitemap.
 */
+import type { ResolveHost } from "./fetch";
 import { fetchRobots } from "./robots";
 import { discoverSitemapUrls } from "./sitemap";
 import {
@@ -23,6 +24,13 @@ export type DiscoverOptions = {
   maxSitemaps: number;
   maxSitemapUrls: number;
   fetchImpl?: typeof fetch;
+  resolveHost?: ResolveHost;
+  /**
+   * Epoch milliseconds. robots.txt and the sitemap walk stop here and the
+   * queue is built from what was found, so discovery fits in one step even on
+   * a host that never answers.
+   */
+  deadline?: number;
 };
 
 export type DiscoveryResult = {
@@ -48,6 +56,8 @@ export async function discoverSite(siteUrl: string, opts: DiscoverOptions): Prom
     userAgent: opts.userAgent,
     timeoutMs: opts.timeoutMs,
     fetchImpl: opts.fetchImpl,
+    resolveHost: opts.resolveHost,
+    deadline: opts.deadline,
   });
 
   const sitemap = await discoverSitemapUrls(origin, robots.sitemaps, {
@@ -56,6 +66,8 @@ export async function discoverSite(siteUrl: string, opts: DiscoverOptions): Prom
     maxSitemaps: opts.maxSitemaps,
     maxUrls: opts.maxSitemapUrls,
     fetchImpl: opts.fetchImpl,
+    resolveHost: opts.resolveHost,
+    deadline: opts.deadline,
   });
 
   const candidates: UrlCandidate[] = [{ url: home }, ...sitemap.urls.map((url) => ({ url }))];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSameSite, looksLikeHtmlPath, normalizeSiteUrl, normalizeUrl, rankUrl, rankUrls } from "./url";
+import { isPrivateHost, isSameSite, looksLikeHtmlPath, normalizeSiteUrl, normalizeUrl, parseIpv6, rankUrl, rankUrls } from "./url";
 
 describe("normalizeSiteUrl", () => {
   it("accepts bare domains and variants", () => {
@@ -151,5 +151,42 @@ describe("rankUrls", () => {
     ]);
     expect(ranked.map((r) => r.rank)).toEqual([0, 1, 2, 3]);
     expect(ranked[0].reason).toBe("home page");
+  });
+});
+
+describe("isPrivateHost with IPv6", () => {
+  it("refuses IPv4-mapped addresses in both spellings", () => {
+    expect(isPrivateHost("[::ffff:7f00:1]")).toBe(true);
+    expect(isPrivateHost("::ffff:127.0.0.1")).toBe(true);
+    expect(isPrivateHost("[::ffff:a9fe:a9fe]")).toBe(true);
+    expect(isPrivateHost("::ffff:0a00:0005")).toBe(true);
+  });
+
+  it("refuses loopback, unspecified, link-local, unique local, multicast, and wrappers of private IPv4", () => {
+    for (const host of ["::1", "::", "fe80::1", "fe80::1%eth0", "fd12:3456::1", "fc00::1", "ff02::1", "2002:0a00:0001::", "64:ff9b::808:808", "2001:db8::1", "::127.0.0.1"]) {
+      expect(isPrivateHost(host), host).toBe(true);
+    }
+  });
+
+  it("allows public IPv6 addresses, including IPv4-mapped public ones", () => {
+    expect(isPrivateHost("2606:4700:4700::1111")).toBe(false);
+    expect(isPrivateHost("[2a03:2880:f12f:83:face:b00c::25de]")).toBe(false);
+    expect(isPrivateHost("::ffff:93.184.216.34")).toBe(false);
+  });
+
+  it("refuses anything with a colon that is not an IPv6 address", () => {
+    expect(isPrivateHost("1:2:3:4:5:6:7:8:9")).toBe(true);
+    expect(isPrivateHost("gg::1")).toBe(true);
+  });
+
+  it("parses compressed and embedded forms", () => {
+    expect(parseIpv6("::ffff:127.0.0.1")).toEqual([0, 0, 0, 0, 0, 0xffff, 0x7f00, 1]);
+    expect(parseIpv6("1::")).toEqual([1, 0, 0, 0, 0, 0, 0, 0]);
+    expect(parseIpv6("a::b::c")).toBeNull();
+  });
+
+  it("makes normalizeSiteUrl refuse a mapped loopback address", () => {
+    expect(() => normalizeSiteUrl("https://[::ffff:127.0.0.1]/")).toThrow();
+    expect(() => normalizeSiteUrl("https://[::ffff:169.254.169.254]/")).toThrow();
   });
 });

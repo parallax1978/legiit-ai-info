@@ -5,6 +5,19 @@ import "server-only";
   (discover, a fetch batch loop, an extract batch, or the merge), guarded by
   a lease lock in crawl_runs, and returns the run view. The browser calls it
   in a loop; see PLAN.md, "Long jobs on Vercel".
+
+  Rules every phase follows, so a step the platform kills at its time limit,
+  a transient database error, or a second tab never leaves a run stuck or
+  corrupted:
+  - The attempt is counted before any work. A phase slice that keeps being
+    cut off fails the run after config.crawl.maxStepAttempts instead of
+    looping forever.
+  - Run writes carry the lock token; a lost lease stops the step. Page writes
+    check the lease by time first.
+  - Work is rebuilt from the rows, not trusted from the cursor: a retried
+    fetch skips pages an earlier try wrote, a retried extract skips pages
+    already extracted, a retried merge finds the fact sheet it already wrote.
+  - No request starts after config.crawl.stepDeadlineMs.
 */
 import { config } from "@/config";
 import {
@@ -15,13 +28,15 @@ import {
   fetchPage,
   parseRobots,
   type CleanedPage,
+  type FetchResult,
   type PlatformDetection,
   type RankedUrl,
   type UrlCandidate,
 } from "@/lib/crawler";
-import type { CrawlRunRow, Json, RunCursor, RunLogEntry } from "@/lib/db/types";
+import type { CrawlRunRow, Json, ProjectRow, RunLogEntry } from "@/lib/db/types";
+import type { FactSheetData } from "@/lib/facts/types";
 import { mergeFindings } from "@/lib/extract/merge";
-import { extractPage, type ExtractPageResult } from "@/lib/extract/page";
+import { deterministicFindings, extractPage, type ExtractPageResult } from "@/lib/extract/page";
 import { runViewFromRow, type RunView } from "@/lib/projects/view";
 import { putHtml } from "@/lib/storage";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -41,10 +56,16 @@ import {
   fetchBatchMessage,
   isHomePage,
   isTerminalStatus,
+  leaseAtRisk,
   lockCutoffIso,
   mergeSitePlatform,
   overTextBudget,
   pageKey,
+  projectStatusAfterFailure,
+  reconcileFetchState,
+  runOwnsProject,
+  stalledMessage,
+  sumCost,
   takeBatch,
   utf8Bytes,
   type StepCursor,
@@ -54,9 +75,13 @@ export type StepResult = { locked: true; run: RunView } | { locked: false; run: 
 
 type StepContext = {
   db: q.Db;
-  /** When this step began; the fetch loop stops starting batches after stepBudgetMs. */
+  /** When this step began. */
   started: number;
+  /** No request starts after this, and request timeouts are cut to fit before it. */
+  deadline: number;
   userId: string;
+  /** The lock token this step holds; every run write is conditional on it. */
+  token: string;
 };
 
 /** What crawl_runs.robots holds. */
@@ -67,22 +92,27 @@ type RobotsRecord = {
   blocked: string[];
 };
 
-function toJson(value: unknown): Json {
-  return value as Json;
-}
-
-function robotsRawOf(robots: Json | null): string | null {
-  if (!robots || typeof robots !== "object" || Array.isArray(robots)) return null;
-  const raw = robots.raw;
-  return typeof raw === "string" ? raw : null;
+/** Thrown when this step no longer holds the run lock. The step stops without writing. */
+class LeaseLostError extends Error {
+  constructor() {
+    super("The run lock passed to another caller.");
+    this.name = "LeaseLostError";
+  }
 }
 
 /** The Crawl-delay robots.txt asked for, in milliseconds, capped so a step still makes progress. */
 export const MAX_CRAWL_DELAY_MS = 5_000;
 
+function toJson(value: unknown): Json {
+  return value as Json;
+}
+
+function robotsRecordOf(robots: Json | null): Partial<RobotsRecord> {
+  return robots && typeof robots === "object" && !Array.isArray(robots) ? (robots as Partial<RobotsRecord>) : {};
+}
+
 function crawlDelayOf(robots: Json | null): number {
-  if (!robots || typeof robots !== "object" || Array.isArray(robots)) return 0;
-  const ms = robots.crawlDelayMs;
+  const ms = robotsRecordOf(robots).crawlDelayMs;
   return typeof ms === "number" && ms > 0 ? Math.min(ms, MAX_CRAWL_DELAY_MS) : 0;
 }
 
@@ -94,14 +124,39 @@ function cursorOf(run: CrawlRunRow): StepCursor {
   return { ...(run.cursor && typeof run.cursor === "object" ? run.cursor : {}) };
 }
 
-/** The cursor as written to crawl_runs.cursor. */
-function storeCursor(cursor: StepCursor): RunCursor {
-  return cursor;
-}
-
 function nowIso(): string {
   return new Date().toISOString();
 }
+
+// ---------------------------------------------------------------------------
+// Guarded writes
+// ---------------------------------------------------------------------------
+
+function assertLease(ctx: StepContext): void {
+  if (leaseAtRisk(ctx.started, Date.now(), config.crawl.lockLeaseMs)) throw new LeaseLostError();
+}
+
+/** Writes the run while this step still holds the lock; throws LeaseLostError otherwise. */
+async function writeRun(ctx: StepContext, runId: string, patch: q.CrawlRunUpdate): Promise<CrawlRunRow> {
+  assertLease(ctx);
+  const row = await q.updateRunLocked(ctx.db, runId, ctx.token, patch);
+  if (!row) throw new LeaseLostError();
+  return row;
+}
+
+async function writePage(ctx: StepContext, pageId: string, patch: q.CrawlPageUpdate): Promise<void> {
+  assertLease(ctx);
+  await q.updatePage(ctx.db, pageId, patch);
+}
+
+/** A slice finished: the error and attempt counters start over. */
+function completed(cursor: StepCursor): StepCursor {
+  return { ...cursor, errorCount: 0, attempts: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// The step
+// ---------------------------------------------------------------------------
 
 export async function stepRun(runId: string, userId: string): Promise<StepResult> {
   const db = createServiceClient();
@@ -118,22 +173,40 @@ export async function stepRun(runId: string, userId: string): Promise<StepResult
     const latest = (await q.getRun(db, runId)) ?? current;
     return { locked: true, run: runViewFromRow(latest) };
   }
-  if (isTerminalStatus(locked.status)) {
-    await q.releaseRun(db, runId, token);
-    return { locked: false, run: runViewFromRow(locked) };
-  }
 
+  const ctx: StepContext = { db, started, deadline: started + config.crawl.stepDeadlineMs, userId, token };
   let run = locked;
   try {
-    if (run.status !== "running" || !run.started_at) {
-      run = await q.updateRun(db, runId, { status: "running", started_at: run.started_at ?? startedIso });
+    if (isTerminalStatus(run.status)) return { locked: false, run: runViewFromRow(run) };
+
+    // Count the attempt before doing anything, so a step the platform kills counts too.
+    const cursor = cursorOf(run);
+    const attempts = (cursor.attempts ?? 0) + 1;
+    if (attempts > config.crawl.maxStepAttempts) {
+      run = await failRun(ctx, run, stalledMessage(run.phase));
+      return { locked: false, run: runViewFromRow(run) };
     }
-    run = await runPhase(run, { db, started, userId });
+    run = await writeRun(ctx, runId, {
+      status: "running",
+      started_at: run.started_at ?? startedIso,
+      cursor: { ...cursor, attempts },
+    });
+
+    run = await runPhase(run, ctx);
   } catch (e) {
-    run = await recordStepError(db, run, e);
+    if (e instanceof LeaseLostError) {
+      const latest = (await q.getRun(db, runId).catch(() => null)) ?? run;
+      return { locked: true, run: runViewFromRow(latest) };
+    }
+    run = await recordStepError(ctx, runId, run, e);
   } finally {
     const closing = run.status === "done" || run.status === "failed";
-    await q.releaseRun(db, runId, token, closing && !run.finished_at ? { finished_at: nowIso() } : {});
+    try {
+      await q.releaseRun(db, runId, token, closing && !run.finished_at ? { finished_at: nowIso() } : {});
+    } catch (e) {
+      // The lease expires on its own; the next step can still take it.
+      console.error(`run ${runId}: could not release the lock: ${errorText(e)}`);
+    }
   }
   return { locked: false, run: runViewFromRow(run) };
 }
@@ -149,34 +222,58 @@ async function runPhase(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRow
     case "merge":
       return mergeStep(run, ctx);
     case "done":
-      return run.status === "done" ? run : q.updateRun(ctx.db, run.id, { status: "done", finished_at: run.finished_at ?? nowIso() });
+      return writeRun(ctx, run.id, {
+        status: "done",
+        finished_at: run.finished_at ?? nowIso(),
+        cursor: completed(cursorOf(run)),
+      });
     case "failed":
-      return run.status === "failed" ? run : q.updateRun(ctx.db, run.id, { status: "failed", finished_at: run.finished_at ?? nowIso() });
+      return writeRun(ctx, run.id, { status: "failed", finished_at: run.finished_at ?? nowIso() });
   }
 }
 
-/** Logs the error, counts it, and fails the run on the third. The phase is kept so the next call retries. */
-async function recordStepError(db: q.Db, run: CrawlRunRow, e: unknown): Promise<CrawlRunRow> {
+/**
+ * Logs the error, counts it, and fails the run on the third in a row. Reads
+ * the run again first, so the batches an earlier part of this step saved are
+ * kept, and the phase is left as it is so the next call retries.
+ */
+async function recordStepError(ctx: StepContext, runId: string, last: CrawlRunRow, e: unknown): Promise<CrawlRunRow> {
   const message = errorText(e);
-  console.error(`run ${run.id}: step failed in phase ${run.phase}: ${message}`);
-  const cursor = cursorOf(run);
-  cursor.errorCount = (cursor.errorCount ?? 0) + 1;
-  const log = appendLog(run.log, "error", message);
-  if (cursor.errorCount >= MAX_STEP_ERRORS) {
-    return failRun(db, run, message, cursor, appendLog(log, "error", `The scan stopped after ${MAX_STEP_ERRORS} errors.`));
+  console.error(`run ${runId}: step failed in phase ${last.phase}: ${message}`);
+  const fresh = (await q.getRun(ctx.db, runId)) ?? last;
+  const cursor = cursorOf(fresh);
+  const errorCount = (cursor.errorCount ?? 0) + 1;
+  const log = appendLog(fresh.log, "error", message);
+  try {
+    if (errorCount >= MAX_STEP_ERRORS) {
+      return await failRun(
+        ctx,
+        fresh,
+        message,
+        { ...cursor, errorCount },
+        appendLog(log, "error", `The scan stopped after ${MAX_STEP_ERRORS} errors in a row.`),
+      );
+    }
+    return await writeRun(ctx, runId, { cursor: { ...cursor, errorCount }, log });
+  } catch (e2) {
+    if (e2 instanceof LeaseLostError) return fresh;
+    throw e2;
   }
-  return q.updateRun(db, run.id, { cursor, log });
 }
 
-/** Marks the run and its project failed with a message a person can read. */
+/**
+ * Marks the run failed with a message a person can read. The project is
+ * marked failed only when this run is its latest and it has no fact sheet to
+ * fall back on; a failed re-run leaves a reviewed project in review.
+ */
 async function failRun(
-  db: q.Db,
+  ctx: StepContext,
   run: CrawlRunRow,
   message: string,
   cursor: StepCursor = cursorOf(run),
   log: RunLogEntry[] = appendLog(run.log, "error", message),
 ): Promise<CrawlRunRow> {
-  const updated = await q.updateRun(db, run.id, {
+  const updated = await writeRun(ctx, run.id, {
     status: "failed",
     phase: "failed",
     error: message,
@@ -185,9 +282,12 @@ async function failRun(
     finished_at: run.finished_at ?? nowIso(),
   });
   try {
-    await q.updateProject(db, run.project_id, { status: "failed" });
+    const project = await q.getProject(ctx.db, run.project_id);
+    if (runOwnsProject(project, run.id)) {
+      await q.updateProject(ctx.db, project.id, { status: projectStatusAfterFailure(project) });
+    }
   } catch (e) {
-    console.error(`run ${run.id}: could not mark project failed: ${errorText(e)}`);
+    console.error(`run ${run.id}: could not update the project after the failure: ${errorText(e)}`);
   }
   return updated;
 }
@@ -219,6 +319,7 @@ async function discoverStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRu
     maxPages: config.crawl.maxPages,
     maxSitemaps: config.crawl.maxSitemaps,
     maxSitemapUrls: config.crawl.maxSitemapUrls,
+    deadline: Math.min(ctx.started + config.crawl.discoverBudgetMs, ctx.deadline),
   });
 
   const robots: RobotsRecord = {
@@ -229,25 +330,25 @@ async function discoverStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRu
   };
 
   if (!discovery.queue.length) {
-    const noted = await q.updateRun(db, run.id, { robots: toJson(robots), sitemaps: discovery.sitemapsRead });
-    return failRun(db, noted, "The site's robots.txt does not allow its pages to be read.");
+    const noted = await writeRun(ctx, run.id, { robots: toJson(robots), sitemaps: discovery.sitemapsRead });
+    return failRun(ctx, noted, "The site's robots.txt does not allow its pages to be read.");
   }
 
-  // A retry after a failed write must not trip the unique (run_id, normalized_url) constraint.
+  // A retry of discovery starts the page list over.
+  assertLease(ctx);
   await q.deletePagesForRun(db, run.id);
   await q.insertPages(
     db,
     discovery.queue.map((entry) => pageInsert(entry, run)),
   );
 
-  const cursor: StepCursor = {
+  const cursor: StepCursor = completed({
     queue: discovery.queue,
     seen: discovery.queue.map((entry) => entry.url),
     usedSitemap: discovery.usedSitemap,
     homeUrl: discovery.home,
     nextRank: discovery.queue.length,
-    errorCount: 0,
-  };
+  });
 
   let log = appendLog(run.log, "info", discoveryMessage(discovery.usedSitemap, discovery.queue.length));
   if (discovery.blockedByRobots.length) {
@@ -255,7 +356,7 @@ async function discoverStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRu
     log = appendLog(log, "warn", `robots.txt blocks ${n} ${n === 1 ? "page" : "pages"}, left out`);
   }
 
-  return q.updateRun(db, run.id, {
+  return writeRun(ctx, run.id, {
     phase: "fetch",
     cursor,
     pages_planned: discovery.queue.length,
@@ -272,42 +373,55 @@ async function discoverStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRu
 // fetch
 // ---------------------------------------------------------------------------
 
+type Prepared = {
+  entry: RankedUrl;
+  pageId: string;
+  result: FetchResult;
+  cleaned: CleanedPage | null;
+  /** Why the page is not stored with text. */
+  problem: { status: "failed" | "skipped"; error: string } | null;
+};
+
 async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRow> {
   const { db } = ctx;
   const cursor = cursorOf(run);
-  let queue: RankedUrl[] = [...(cursor.queue ?? [])];
-  const seen = new Set<string>(cursor.seen ?? []);
   const homeUrl = cursor.homeUrl ?? (await q.getProject(db, run.project_id)).site_url;
   const usedSitemap = cursor.usedSitemap ?? true;
 
-  // Every row of the run with its status, not only the queued ones: a retry after a
-  // step that failed mid-batch skips the pages that try already wrote instead of
-  // inserting them again (unique run_id, normalized_url).
+  // The rows decide what is left; see reconcileFetchState.
   const rowsByKey = new Map<string, q.PageForFetch>();
-  for (const row of await q.listPagesForFetch(db, run.id)) rowsByKey.set(row.normalized_url, row);
+  const rows = await q.listPagesForFetch(db, run.id);
+  for (const row of rows) rowsByKey.set(row.normalized_url, row);
+  const state = reconcileFetchState(cursor, rows);
+
+  let queue: RankedUrl[] = state.queue;
+  const seen = new Set<string>(state.seen);
+  let nextRank = Math.max(state.nextRank, cursor.nextRank ?? 0);
+  let pagesPlanned = state.planned;
+  let pagesFetched = state.fetched;
+  let pagesFailed = state.failed;
+  let textBytes = Math.max(Number(run.text_bytes ?? 0), state.textChars);
+  let platform: PlatformDetection = { platform: run.platform, evidence: run.platform_evidence ?? [] };
+  let log = run.log;
+  let budgetWarned = false;
 
   // Links found on pages are only followed when there was no sitemap; robots is re-read from the run.
   let allowed: ((url: string) => boolean) | undefined;
   if (!usedSitemap) {
     try {
-      allowed = parseRobots(robotsRawOf(run.robots), new URL(homeUrl).origin, config.crawl.userAgent).allowed;
+      const raw = robotsRecordOf(run.robots).raw ?? null;
+      allowed = parseRobots(raw, new URL(homeUrl).origin, config.crawl.userAgent).allowed;
     } catch {
       allowed = undefined;
     }
   }
 
-  let pagesPlanned = run.pages_planned;
-  let pagesFetched = run.pages_fetched;
-  let pagesFailed = run.pages_failed;
-  let textBytes = Number(run.text_bytes ?? 0);
-  let platform: PlatformDetection = { platform: run.platform, evidence: run.platform_evidence ?? [] };
-  let log = run.log;
-  let budgetWarned = false;
-
   const fetchOpts = {
     userAgent: config.crawl.userAgent,
     timeoutMs: config.crawl.fetchTimeoutMs,
     maxBytes: config.crawl.maxHtmlBytes,
+    // Leaves time for the uploads and writes after the last batch.
+    deadline: ctx.deadline - config.crawl.writeReserveMs,
   };
 
   // A site that asks for a Crawl-delay is read one page at a time with that pause between pages.
@@ -320,68 +434,81 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
     batches++;
     const taken = takeBatch(queue, parallel);
     queue = taken.rest;
-    const batch = taken.batch.filter((entry) => {
-      const row = rowsByKey.get(pageKey(entry.url));
-      return !row || row.status === "queued";
-    });
+
+    // Every entry gets its row before the fetch, so a page id exists for the upload path.
+    const missing = taken.batch.filter((entry) => !rowsByKey.has(pageKey(entry.url)));
+    if (missing.length) {
+      assertLease(ctx);
+      for (const inserted of await q.insertNewPages(db, missing.map((entry) => pageInsert(entry, run)))) {
+        rowsByKey.set(inserted.normalized_url, { ...inserted, status: "queued", reason: null, text_chars: 0 });
+      }
+    }
+    const batch = taken.batch.filter((entry) => rowsByKey.get(pageKey(entry.url))?.status === "queued");
     if (!batch.length) continue;
 
     const results = await Promise.all(batch.map((entry) => fetchPage(entry.url, fetchOpts)));
     const detections: PlatformDetection[] = [];
-    let read = 0;
 
-    for (let i = 0; i < batch.length; i++) {
-      const entry = batch[i];
+    // Clean each page and apply the text budget, in rank order.
+    const prepared: Prepared[] = batch.map((entry, i) => {
       const result = results[i];
-      const key = pageKey(entry.url);
-      let pageId = rowsByKey.get(key)?.id;
-      if (!pageId) {
-        const [inserted] = await q.insertPages(db, [pageInsert(entry, run)]);
-        rowsByKey.set(inserted.normalized_url, { ...inserted, status: "queued" });
-        pageId = inserted.id;
-      }
-      const fetchedAt = nowIso();
-
+      const pageId = rowsByKey.get(pageKey(entry.url))!.id;
       if (!result.ok || result.html === null) {
+        return { entry, pageId, result, cleaned: null, problem: { status: "failed", error: result.error ?? "fetch failed" } };
+      }
+      const pageUrl = result.finalUrl || entry.url;
+      try {
+        const cleaned = cleanPage(result.html, pageUrl);
+        detections.push(detectPlatform(result.html, pageUrl, { generator: cleaned.generator }));
+        const bytes = utf8Bytes(cleaned.text);
+        if (overTextBudget(textBytes, bytes, config.crawl.maxTextBytes)) {
+          return { entry, pageId, result, cleaned, problem: { status: "skipped", error: "text budget" } };
+        }
+        textBytes += bytes;
+        return { entry, pageId, result, cleaned, problem: null };
+      } catch (e) {
+        // A page the cleaner cannot handle is recorded as failed; it must not stop the run.
+        return { entry, pageId, result, cleaned: null, problem: { status: "failed", error: `clean: ${errorText(e)}` } };
+      }
+    });
+
+    // Uploads run side by side; a failed upload only leaves html_path empty.
+    const htmlPaths = await Promise.all(
+      prepared.map((p) =>
+        p.problem === null && p.result.html !== null
+          ? putHtml(db, { projectId: run.project_id, runId: run.id, pageId: p.pageId, html: p.result.html })
+          : Promise.resolve(null),
+      ),
+    );
+
+    let read = 0;
+    for (let i = 0; i < prepared.length; i++) {
+      const { entry, pageId, result, cleaned, problem } = prepared[i];
+      const fetchedAt = nowIso();
+      const key = pageKey(entry.url);
+
+      if (problem?.status === "failed" || !cleaned) {
         pagesFailed++;
-        await q.updatePage(db, pageId, {
+        await writePage(ctx, pageId, {
           status: "failed",
           http_status: result.status || null,
           fetched_at: fetchedAt,
           html_bytes: result.bytes || null,
-          error: result.error ?? "fetch failed",
+          error: problem?.error ?? "fetch failed",
         });
+        rowsByKey.set(key, { ...rowsByKey.get(key)!, status: "failed" });
         continue;
       }
-
-      const pageUrl = result.finalUrl || entry.url;
-      let cleaned: CleanedPage;
-      try {
-        cleaned = cleanPage(result.html, pageUrl);
-        detections.push(detectPlatform(result.html, pageUrl, { generator: cleaned.generator }));
-      } catch (e) {
-        // A page the cleaner cannot handle is recorded as failed; it must not stop the run.
-        pagesFailed++;
-        await q.updatePage(db, pageId, {
-          status: "failed",
-          http_status: result.status,
-          fetched_at: fetchedAt,
-          html_bytes: result.bytes,
-          error: `clean: ${errorText(e)}`,
-        });
-        continue;
-      }
-
-      const bytes = utf8Bytes(cleaned.text);
-      if (overTextBudget(textBytes, bytes, config.crawl.maxTextBytes)) {
-        await q.updatePage(db, pageId, {
+      if (problem?.status === "skipped") {
+        await writePage(ctx, pageId, {
           status: "skipped",
           http_status: result.status,
           fetched_at: fetchedAt,
           title: cleaned.title,
           html_bytes: result.bytes,
-          error: "text budget",
+          error: problem.error,
         });
+        rowsByKey.set(key, { ...rowsByKey.get(key)!, status: "skipped" });
         if (!budgetWarned) {
           log = appendLog(log, "warn", "The text budget for this site is used up; the remaining pages are skipped");
           budgetWarned = true;
@@ -389,8 +516,7 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
         continue;
       }
 
-      const htmlPath = await putHtml(db, { projectId: run.project_id, runId: run.id, pageId, html: result.html });
-      await q.updatePage(db, pageId, {
+      await writePage(ctx, pageId, {
         status: "fetched",
         http_status: result.status,
         fetched_at: fetchedAt,
@@ -401,15 +527,15 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
         text: cleaned.text,
         text_chars: cleaned.textChars,
         headings: cleaned.headings,
-        html_path: htmlPath,
+        html_path: htmlPaths[i],
         html_bytes: result.bytes,
         jsonld: cleaned.jsonld,
         links: cleaned.links,
         images: cleaned.images,
         error: null,
       });
+      rowsByKey.set(key, { ...rowsByKey.get(key)!, status: "fetched", text_chars: cleaned.textChars });
       pagesFetched++;
-      textBytes += bytes;
       read++;
 
       if (!usedSitemap && pagesPlanned < config.crawl.maxPages) {
@@ -419,19 +545,20 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
         const added = addDiscoveredLinks(queue, seen, links, {
           home: homeUrl,
           max: config.crawl.maxPages - pagesPlanned,
-          nextRank: cursor.nextRank ?? pagesPlanned,
+          nextRank,
           ...(allowed ? { allowed } : {}),
-        });
+        }).filter((a) => !rowsByKey.has(pageKey(a.url)));
         if (added.length) {
-          const rows = await q.insertPages(
-            db,
-            added.map((a) => pageInsert(a, run)),
-          );
-          for (const row of rows) rowsByKey.set(row.normalized_url, { ...row, status: "queued" });
-          queue.push(...added);
-          for (const a of added) seen.add(a.url);
-          cursor.nextRank = (cursor.nextRank ?? pagesPlanned) + added.length;
-          pagesPlanned += added.length;
+          assertLease(ctx);
+          const inserted = await q.insertNewPages(db, added.map((a) => pageInsert(a, run)));
+          const insertedKeys = new Set(inserted.map((r) => r.normalized_url));
+          for (const r of inserted) rowsByKey.set(r.normalized_url, { ...r, status: "queued", reason: null, text_chars: 0 });
+          for (const a of added) {
+            seen.add(a.url);
+            if (insertedKeys.has(pageKey(a.url))) queue.push(a);
+          }
+          nextRank = Math.max(nextRank, ...added.map((a) => a.rank + 1));
+          pagesPlanned += inserted.length;
         }
       }
     }
@@ -439,8 +566,8 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
     if (detections.length) platform = mergeSitePlatform(platform, detections);
     log = appendLog(log, "info", fetchBatchMessage(read, pagesPlanned - queue.length, pagesPlanned));
 
-    run = await q.updateRun(db, run.id, {
-      cursor: storeCursor({ ...cursor, queue, seen: [...seen], errorCount: 0 }),
+    run = await writeRun(ctx, run.id, {
+      cursor: completed({ ...cursor, queue, seen: [...seen], nextRank }),
       pages_planned: pagesPlanned,
       pages_fetched: pagesFetched,
       pages_failed: pagesFailed,
@@ -454,17 +581,17 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
   if (queue.length) return run;
 
   // Counted from the rows, so pages written by an earlier try of this step are in the totals.
-  const rows = await q.listPagesForOrder(db, run.id);
-  const extractQueue = extractOrder(rows);
-  if (!extractQueue.length) return failRun(db, run, "None of the pages could be read.");
+  const finalRows = await q.listPagesForOrder(db, run.id);
+  const extractQueue = extractOrder(finalRows);
+  if (!extractQueue.length) return failRun(ctx, run, "None of the pages could be read.");
   const fetched = extractQueue.length;
-  const failed = rows.filter((p) => p.status === "failed").length;
 
-  return q.updateRun(db, run.id, {
+  return writeRun(ctx, run.id, {
     phase: "extract",
-    cursor: storeCursor({ ...cursorOf(run), queue: [], extractQueue, errorCount: 0 }),
+    cursor: completed({ ...cursorOf(run), queue: [], extractQueue }),
+    pages_planned: finalRows.length,
     pages_fetched: fetched,
-    pages_failed: failed,
+    pages_failed: finalRows.filter((p) => p.status === "failed").length,
     log: appendLog(run.log, "info", `Read ${fetched} ${fetched === 1 ? "page" : "pages"}, pulling the facts next`),
   });
 }
@@ -479,9 +606,9 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
   const extractQueue = [...(cursor.extractQueue ?? [])];
 
   if (!extractQueue.length) {
-    return q.updateRun(db, run.id, {
+    return writeRun(ctx, run.id, {
       phase: "merge",
-      cursor: storeCursor({ ...cursor, errorCount: 0 }),
+      cursor: completed(cursor),
       log: appendLog(run.log, "info", "Putting the fact sheet together"),
     });
   }
@@ -491,27 +618,33 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
   const homeUrl = cursor.homeUrl ?? project.site_url;
 
   const ids = extractQueue.slice(0, config.extract.pagesPerStep);
-  const pages = await q.loadPagesForExtract(db, ids);
-  const byId = new Map(pages.map((p) => [p.id, p]));
+  const loaded = await q.loadPagesForExtract(db, ids);
+  // A page an earlier, cut-off try already finished is not sent to the model again.
+  const pages = loaded.filter((p) => p.status === "fetched");
+  const byId = new Map(loaded.map((p) => [p.id, p]));
+
+  const inputOf = (page: q.PageForExtract) => ({
+    url: page.url,
+    jsonld: Array.isArray(page.jsonld) ? page.jsonld : [],
+    links: page.links ?? {},
+    images: Array.isArray(page.images) ? page.images : [],
+    cleanedMeta: {
+      title: page.title,
+      metaDescription: page.meta_description,
+      canonical: page.canonical,
+      lang: page.lang,
+    },
+    isHome: isHomePage(page.url, homeUrl),
+  });
 
   const outcomes = new Map<string, PromiseSettledResult<ExtractPageResult>>();
   for (const group of chunk(pages, config.extract.parallel)) {
     const settled = await Promise.allSettled(
       group.map((page) =>
         extractPage({
-          url: page.url,
+          ...inputOf(page),
           title: page.title,
           text: page.text ?? "",
-          jsonld: Array.isArray(page.jsonld) ? page.jsonld : [],
-          links: page.links ?? {},
-          images: Array.isArray(page.images) ? page.images : [],
-          cleanedMeta: {
-            title: page.title,
-            metaDescription: page.meta_description,
-            canonical: page.canonical,
-            lang: page.lang,
-          },
-          isHome: isHomePage(page.url, homeUrl),
           spec,
           ctx: { userId: ctx.userId, projectId: run.project_id, runId: run.id, purpose: "extract_page" },
         }),
@@ -528,8 +661,6 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
     throw new Error(`Extraction failed: ${errorText(rejected[0].reason)}`);
   }
 
-  let pagesExtracted = run.pages_extracted;
-  let cost = Number(run.cost_usd ?? 0);
   let log = run.log;
   let extracted = 0;
   const attempts: Record<string, number> = { ...(cursor.extractAttempts ?? {}) };
@@ -543,7 +674,7 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
     if (outcome.status === "fulfilled") {
       const r = outcome.value;
       const tokensIn = r.usage.inputTokens + (r.usage.cacheReadTokens ?? 0) + (r.usage.cacheWriteTokens ?? 0);
-      await q.updatePage(db, id, {
+      await writePage(ctx, id, {
         status: "extracted",
         findings: r.findings,
         findings_dropped: r.dropped,
@@ -552,8 +683,6 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
         extract_cost_usd: r.costUsd,
         error: null,
       });
-      cost += r.costUsd;
-      pagesExtracted++;
       extracted++;
     } else {
       const message = errorText(outcome.reason);
@@ -563,7 +692,13 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
         retry.push(id);
         log = appendLog(log, "warn", `Could not pull facts from ${page.url} (${message}); will try once more`);
       } else {
-        await q.updatePage(db, id, { status: "failed", error: `extraction: ${message}` });
+        // The model could not read it, but its JSON-LD, links, and canonical still count.
+        await writePage(ctx, id, {
+          status: "failed",
+          findings: deterministicFindings(inputOf(page)),
+          findings_dropped: 0,
+          error: `extraction: ${message}`,
+        });
         log = appendLog(log, "warn", `Could not pull facts from ${page.url}: ${message}`);
       }
     }
@@ -571,15 +706,21 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
 
   const done = new Set(ids);
   const remaining = [...extractQueue.filter((id) => !done.has(id)), ...retry];
+
+  // Counters and cost come from the rows and llm_calls, which a cut-off try cannot leave behind.
+  const rows = await q.listPagesForOrder(db, run.id);
+  const pagesExtracted = rows.filter((p) => p.status === "extracted").length;
+  const cost = sumCost(await q.runLlmCosts(db, run.id));
+
   log = appendLog(log, "info", extractBatchMessage(extracted, pagesExtracted, run.pages_fetched));
   const finished = remaining.length === 0;
   if (finished) log = appendLog(log, "info", "Putting the fact sheet together");
 
-  return q.updateRun(db, run.id, {
+  return writeRun(ctx, run.id, {
     ...(finished ? { phase: "merge" as const } : {}),
-    cursor: storeCursor({ ...cursor, extractQueue: remaining, extractAttempts: attempts, errorCount: 0 }),
+    cursor: completed({ ...cursor, extractQueue: remaining, extractAttempts: attempts }),
     pages_extracted: pagesExtracted,
-    cost_usd: Math.round(cost * 1_000_000) / 1_000_000,
+    cost_usd: cost,
     log,
   });
 }
@@ -594,44 +735,88 @@ async function mergeStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
   const spec = getTemplate(project.template_id);
 
   const pages = await q.loadPagesForMerge(db, run.id);
+  const modelPages = pages.filter((p) => p.status === "extracted").length;
+  if (modelPages === 0) {
+    // An all-missing fact sheet would read as "the site says nothing"; it is a failed scan.
+    return failRun(ctx, run, "The facts could not be read from any page. Run the scan again in a few minutes.");
+  }
+
   const withFindings = pages.filter((p) => Array.isArray(p.findings));
   const findings = withFindings.flatMap((p) => p.findings ?? []);
   const droppedCount = pages.reduce((n, p) => n + (p.findings_dropped ?? 0), 0);
-
   const { data, stats } = mergeFindings(spec, findings, { pagesUsed: withFindings.length, droppedCount });
-  const existingSchema = existingSchemaOf(pages);
 
-  const version = (await q.maxFactSheetVersion(db, project.id)) + 1;
-  const factSheetId = await q.insertFactSheet(db, {
-    project_id: project.id,
-    user_id: run.user_id,
-    version,
-    source: "crawl",
-    crawl_run_id: run.id,
+  const factSheetId = await ensureFactSheet(ctx, run, project, {
     template_id: spec.id,
     data,
-    existing_schema: existingSchema,
+    existing_schema: existingSchemaOf(pages),
     stats,
   });
 
+  // The project first, then the run: a retry after a cut-off here redoes both and
+  // reuses the sheet, so the project can never be left pointing nowhere.
+  await syncProject(ctx, run, project, factSheetId, data);
+
   const finishedAt = nowIso();
-  const updated = await q.updateRun(db, run.id, {
+  return writeRun(ctx, run.id, {
     fact_sheet_id: factSheetId,
     phase: "done",
     status: "done",
     finished_at: finishedAt,
-    pages_extracted: withFindings.length,
-    cursor: storeCursor({ ...cursorOf(run), errorCount: 0 }),
+    pages_extracted: modelPages,
+    cursor: completed(cursorOf(run)),
     log: appendLog(run.log, "info", factSheetReadyMessage(stats), finishedAt),
   });
+}
 
-  await q.updateProject(db, project.id, {
+/** The run's fact sheet: the one an earlier try wrote, or a new version. */
+async function ensureFactSheet(
+  ctx: StepContext,
+  run: CrawlRunRow,
+  project: ProjectRow,
+  sheet: Pick<q.FactSheetInsert, "template_id" | "data" | "existing_schema" | "stats">,
+): Promise<string> {
+  const { db } = ctx;
+  const existing = run.fact_sheet_id ?? (await q.factSheetIdForRun(db, run.id));
+  if (existing) return existing;
+
+  assertLease(ctx);
+  const version = (await q.maxFactSheetVersion(db, project.id)) + 1;
+  try {
+    return await q.insertFactSheet(db, {
+      project_id: project.id,
+      user_id: run.user_id,
+      version,
+      source: "crawl",
+      crawl_run_id: run.id,
+      ...sheet,
+    });
+  } catch (e) {
+    // The unique index on crawl_run_id: a try that was cut off wrote it after all.
+    if (e instanceof q.DbError && e.code === "23505") {
+      const written = await q.factSheetIdForRun(db, run.id);
+      if (written) return written;
+    }
+    throw e;
+  }
+}
+
+/** Points the project at this run's fact sheet, unless a newer run has taken the project over. */
+async function syncProject(
+  ctx: StepContext,
+  run: CrawlRunRow,
+  project: ProjectRow,
+  factSheetId: string,
+  data: FactSheetData,
+): Promise<void> {
+  if (!runOwnsProject(project, run.id)) return;
+  assertLease(ctx);
+  await q.updateProject(ctx.db, project.id, {
     status: "review",
+    latest_crawl_run_id: run.id,
     latest_fact_sheet_id: factSheetId,
     business_name: companyNameFrom(data) ?? project.business_name,
-    platform: updated.platform,
-    platform_evidence: updated.platform_evidence ?? [],
+    platform: run.platform,
+    platform_evidence: run.platform_evidence ?? [],
   });
-
-  return updated;
 }

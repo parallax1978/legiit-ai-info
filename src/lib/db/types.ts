@@ -53,6 +53,12 @@ export type RunCursor = {
   errorCount?: number;
   /** Extraction attempts per crawl_pages id; a page is marked failed after config.llm.extractAttempts. */
   extractAttempts?: Record<string, number>;
+  /**
+   * Steps started on the current phase slice without finishing it. Written when
+   * a step takes the lock and reset when a slice completes, so steps killed at
+   * the function ceiling are counted (config.crawl.maxStepAttempts).
+   */
+  attempts?: number;
 };
 
 export type PageLinks = {

@@ -15,12 +15,18 @@ import {
   fetchBatchMessage,
   isHomePage,
   isTerminalStatus,
+  leaseAtRisk,
   lockCutoffIso,
   lockFilter,
   mergeSitePlatform,
   overTextBudget,
   pageKey,
+  projectStatusAfterFailure,
+  reconcileFetchState,
   reusedPageRow,
+  runOwnsProject,
+  stalledMessage,
+  sumCost,
   takeBatch,
   utf8Bytes,
 } from "./logic";
@@ -237,5 +243,85 @@ describe("pages and the fact sheet", () => {
     expect(row.html_path).toBe("p/r/x.html");
     expect(row.fetched_at).toBe("2026-11-05T09:00:00.000Z");
     expect(row.links).toEqual({ tel: ["+1"] });
+  });
+});
+
+describe("reconcileFetchState", () => {
+  const row = (
+    url: string,
+    rank: number,
+    status: CrawlPageRow["status"],
+    text_chars = 0,
+    reason: string | null = null,
+  ) => ({ id: `id-${rank}`, url, normalized_url: pageKey(url), rank, status, reason, text_chars });
+
+  it("rebuilds the queue from the rows after a try that died before saving the cursor", () => {
+    // The cursor still says [home]. The rows say home was fetched and two links were queued.
+    const cursor = { queue: [{ url: "https://a.com/", rank: 0, reason: "home page" }], seen: ["https://a.com/"] };
+    const rows = [
+      row("https://a.com/", 0, "fetched", 1200),
+      row("https://a.com/about", 1, "queued", 0, "about page"),
+      row("https://a.com/contact", 2, "queued", 0, "contact page"),
+    ];
+    const state = reconcileFetchState(cursor, rows);
+    expect(state.queue.map((e) => e.url)).toEqual(["https://a.com/about", "https://a.com/contact"]);
+    expect(state.queue[0].reason).toBe("about page");
+    expect(state.seen).toEqual(expect.arrayContaining(["https://a.com/", "https://a.com/about", "https://a.com/contact"]));
+    expect(state).toMatchObject({ planned: 3, fetched: 1, failed: 0, nextRank: 3, textChars: 1200 });
+  });
+
+  it("keeps the cursor's order for entries that are still queued and drops duplicates", () => {
+    const cursor = {
+      queue: [
+        { url: "https://a.com/team", rank: 4, reason: "team page" },
+        { url: "https://a.com/team/", rank: 4, reason: "team page" },
+        { url: "https://a.com/faq", rank: 5, reason: "faq page" },
+      ],
+      seen: [],
+    };
+    const rows = [row("https://a.com/team", 4, "queued"), row("https://a.com/faq", 5, "failed")];
+    const state = reconcileFetchState(cursor, rows);
+    expect(state.queue).toEqual([{ url: "https://a.com/team", rank: 4, reason: "team page" }]);
+    expect(state.failed).toBe(1);
+  });
+
+  it("keeps a cursor entry that has no row yet", () => {
+    const cursor = { queue: [{ url: "https://a.com/new", rank: 9, reason: "linked" }], seen: [] };
+    const state = reconcileFetchState(cursor, []);
+    expect(state.queue).toEqual([{ url: "https://a.com/new", rank: 9, reason: "linked" }]);
+    expect(state.planned).toBe(1);
+    expect(state.nextRank).toBe(10);
+  });
+
+  it("starts ranks at zero with nothing planned", () => {
+    expect(reconcileFetchState({}, []).nextRank).toBe(0);
+  });
+});
+
+describe("project pointers", () => {
+  it("lets only the project's latest run update it", () => {
+    expect(runOwnsProject({ latest_crawl_run_id: "r1" }, "r1")).toBe(true);
+    expect(runOwnsProject({ latest_crawl_run_id: null }, "r1")).toBe(true);
+    expect(runOwnsProject({ latest_crawl_run_id: "r2" }, "r1")).toBe(false);
+  });
+
+  it("keeps a project with a fact sheet in review after a failed re-run", () => {
+    expect(projectStatusAfterFailure({ latest_fact_sheet_id: "f1" })).toBe("review");
+    expect(projectStatusAfterFailure({ latest_fact_sheet_id: null })).toBe("failed");
+  });
+});
+
+describe("attempts and cost", () => {
+  it("flags a step that has run close to its lease", () => {
+    expect(leaseAtRisk(0, 64_000, 70_000)).toBe(false);
+    expect(leaseAtRisk(0, 66_000, 70_000)).toBe(true);
+  });
+
+  it("names the phase a stalled run was in", () => {
+    expect(stalledMessage("discover")).toContain("finding the pages");
+  });
+
+  it("sums llm_calls costs, numeric strings included", () => {
+    expect(sumCost([{ cost_usd: 0.0012 }, { cost_usd: "0.0008" }, { cost_usd: null }])).toBe(0.002);
   });
 });

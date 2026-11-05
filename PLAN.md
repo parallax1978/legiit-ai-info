@@ -112,8 +112,12 @@ No queue service. Every long job is a state machine in Postgres (`crawl_runs.pha
 - `extract`: up to 4 pages per step through Haiku, with the quote-check on every value.
 - `merge`: one step. Writes the fact sheet version.
 
-Each step exports `maxDuration = 60` and stops itself at 20 s, so it fits inside both
-the old 10 s/60 s and the Fluid Compute limits on Vercel's Hobby and Pro plans. The
+Each step exports `maxDuration = 60`, starts no new batch after 20 s, and starts no
+request at all after 45 s (request timeouts are cut to fit), so it fits inside the
+Fluid Compute limits on Vercel's Hobby and Pro plans. Discovery has its own 30 s
+budget for robots.txt and sitemaps and uses what it found when the budget runs out.
+A step counts its attempt before doing any work; a phase slice cut off five times
+in a row fails the run with a plain message. The
 browser drives the loop: call `step`, render progress from the response, call again.
 A lock column (`locked_at`, 70 s lease, longer than the function ceiling) stops two
 tabs stepping the same run, and a step that Vercel kills at the ceiling cannot

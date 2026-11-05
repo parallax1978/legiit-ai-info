@@ -5,7 +5,7 @@
 */
 import { load } from "cheerio";
 import { isElement, tagName, type DomElement, type DomNode } from "./dom";
-import { fetchText } from "./fetch";
+import { MIN_REQUEST_MS, fetchText, type ResolveHost } from "./fetch";
 import { isSameSite, looksLikeHtmlPath, normalizeUrl } from "./url";
 
 export type ParsedSitemap = { kind: "index" | "urlset" | "unknown"; urls: string[] };
@@ -16,6 +16,9 @@ export type DiscoverSitemapOptions = {
   maxSitemaps: number;
   maxUrls: number;
   fetchImpl?: typeof fetch;
+  resolveHost?: ResolveHost;
+  /** Epoch milliseconds. The walk stops here with what it has; see FetchPageOptions.deadline. */
+  deadline?: number;
 };
 
 export type DiscoveredSitemaps = { urls: string[]; sitemapsRead: string[] };
@@ -126,7 +129,9 @@ export async function discoverSitemapUrls(
   let attempts = 0;
   const maxAttempts = Math.max(opts.maxSitemaps, 1) * 2 + DEFAULT_SITEMAP_PATHS.length;
 
-  const budgetLeft = () => sitemapsRead.length < opts.maxSitemaps && urls.length < opts.maxUrls && attempts < maxAttempts;
+  const timeLeft = () => opts.deadline === undefined || opts.deadline - Date.now() >= MIN_REQUEST_MS;
+  const budgetLeft = () =>
+    sitemapsRead.length < opts.maxSitemaps && urls.length < opts.maxUrls && attempts < maxAttempts && timeLeft();
 
   const addUrl = (loc: string) => {
     if (urls.length >= opts.maxUrls) return;
@@ -153,6 +158,8 @@ export async function discoverSitemapUrls(
         timeoutMs: opts.timeoutMs,
         maxBytes: MAX_SITEMAP_BYTES,
         fetchImpl: opts.fetchImpl,
+        resolveHost: opts.resolveHost,
+        deadline: opts.deadline,
         accept: "application/xml,text/xml;q=0.9,*/*;q=0.5",
         allowOffSite: true,
       });

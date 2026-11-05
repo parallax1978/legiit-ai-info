@@ -95,6 +95,22 @@ export const config = {
     /** A step stops starting new work after this long. */
     stepBudgetMs: 20_000,
     /**
+     * No request starts after this point in a step, and request timeouts are
+     * cut to fit before it, so a step's last writes land well inside the 60 s
+     * function ceiling (stepMaxDurationSeconds).
+     */
+    stepDeadlineMs: 45_000,
+    /** robots.txt and the sitemap walk stop here, and discovery uses what it found. */
+    discoverBudgetMs: 30_000,
+    /** Kept back from the step deadline for the uploads and writes after a fetch batch. */
+    writeReserveMs: 10_000,
+    /**
+     * Steps a phase may start without finishing before the run fails. Counted
+     * when a step takes the lock, so a step the platform kills at its time
+     * limit counts too.
+     */
+    maxStepAttempts: 5,
+    /**
      * How long one step may hold the run lock before another caller may take it.
      * Longer than the function ceiling (stepMaxDurationSeconds), so a step that
      * Vercel kills at the ceiling can never overlap the retry that follows it.

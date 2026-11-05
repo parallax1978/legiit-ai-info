@@ -4,7 +4,7 @@
   unreadable robots.txt allows everything.
 */
 import robotsParser from "robots-parser";
-import { fetchText } from "./fetch";
+import { fetchText, type ResolveHost } from "./fetch";
 
 export type RobotsResult = {
   allowed: (url: string) => boolean;
@@ -17,6 +17,9 @@ export type FetchRobotsOptions = {
   userAgent: string;
   timeoutMs: number;
   fetchImpl?: typeof fetch;
+  resolveHost?: ResolveHost;
+  /** Epoch milliseconds; see FetchPageOptions.deadline. */
+  deadline?: number;
 };
 
 const MAX_ROBOTS_BYTES = 512_000;
@@ -90,6 +93,8 @@ export async function fetchRobots(siteOrigin: string, opts: FetchRobotsOptions):
     timeoutMs: opts.timeoutMs,
     maxBytes: MAX_ROBOTS_BYTES,
     fetchImpl: opts.fetchImpl,
+    resolveHost: opts.resolveHost,
+    deadline: opts.deadline,
     accept: "text/plain,*/*;q=0.8",
   });
   if (!r.ok || r.text === null) return allowAll;

@@ -25,14 +25,31 @@ export function originFromHeaders(h: Headers): string {
   return `${proto}://${host}`;
 }
 
+const PROBE_ORIGIN = "http://next.invalid";
+
 /**
- * A same-site path to continue to after sign-in. Anything that is not a plain
- * absolute path (an external URL, a protocol-relative URL, header injection)
- * becomes the fallback.
+ * A same-site path to continue to after sign-in, as pathname plus query.
+ * The value is parsed the way a browser and the URL API parse it, so tricks
+ * the parser undoes (a tab or newline the parser strips, backslashes it reads
+ * as slashes, "//host") resolve to a different origin and become the
+ * fallback. Control characters are refused outright.
  */
 export function safeNext(value: unknown, fallback = "/app"): string {
-  if (typeof value !== "string") return fallback;
-  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return fallback;
-  if (/[\r\n\0]/.test(value)) return fallback;
-  return value;
+  if (typeof value !== "string" || !value.startsWith("/")) return fallback;
+  if (/[\u0000-\u001f\u007f]/.test(value)) return fallback;
+  let parsed: URL;
+  try {
+    parsed = new URL(value, PROBE_ORIGIN);
+  } catch {
+    return fallback;
+  }
+  if (parsed.origin !== PROBE_ORIGIN) return fallback;
+  return `${parsed.pathname}${parsed.search}`;
+}
+
+/** The absolute URL for a safe next path on this origin; never leaves the origin. */
+export function nextUrl(next: string, origin: string): URL {
+  const base = new URL(origin);
+  const target = new URL(safeNext(next), base);
+  return target.origin === base.origin ? target : new URL("/app", base);
 }

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { originFromHeaders, safeNext } from "../redirects";
+import { nextUrl, originFromHeaders, safeNext } from "../redirects";
 
 /*
   Where the magic link and the Google redirect land. Supabase sends either a
@@ -26,5 +26,5 @@ export async function GET(request: NextRequest) {
     ok = !error;
   }
 
-  return NextResponse.redirect(new URL(ok ? next : "/login?error=link", origin), { status: 303 });
+  return NextResponse.redirect(nextUrl(ok ? next : "/login?error=link", origin), { status: 303 });
 }
