@@ -189,6 +189,143 @@ describe("mergeFindings lists", () => {
   });
 });
 
+describe("mergeFindings people", () => {
+  const TEAM = "https://darcybaileycounselling.com/our-team/";
+  const THERAPISTS = ["Nancy Orlikow", "Trish Rapske", "Aman Bains", "Julie Sprague", "Noah Molema"];
+  const names = (value: FactValue) => (Array.isArray(value) ? value.map((item) => item.name) : []);
+
+  it("does not join people who only share the team page as their url", () => {
+    const { data } = mergeFindings(
+      ABOUT_V1,
+      THERAPISTS.map((name) => finding("team_members", [{ name, role: "Registered Clinical Counsellor", url: TEAM }], name, TEAM)),
+    );
+    expect(names(data.fields.team_members.value)).toEqual(THERAPISTS);
+    expect(data.fields.team_members.itemConflicts).toBeUndefined();
+  });
+
+  it("does not join JSON-LD employees who share a url but not a name", () => {
+    const { data } = mergeFindings(
+      ABOUT_V1,
+      THERAPISTS.map((name) => finding("team_members", [{ name, url: TEAM }], `{"name": "${name}"}`, HOME, { source: "jsonld" })),
+    );
+    expect(names(data.fields.team_members.value)).toEqual(THERAPISTS);
+  });
+
+  it("joins two full names through a shared profile url only when they share a name", () => {
+    const profile = "https://darcybaileycounselling.com/palvinder-manhas/";
+    const { data } = mergeFindings(ABOUT_V1, [
+      finding("team_members", [{ name: "Pal Manhas", role: "Registered Clinical Counsellor", url: profile }], "Pal Manhas", TEAM),
+      // The profile page gives itself as her url.
+      finding("team_members", [{ name: "Palvinder Manhas-Bains", role: "Registered Clinical Counsellor", url: profile }], "Palvinder Manhas-Bains", profile),
+      finding("team_members", [{ name: "Julie Sprague", role: "Registered Clinical Counsellor", url: profile }], "Julie Sprague", HOME),
+    ]);
+    expect(names(data.fields.team_members.value)).toEqual(["Pal Manhas", "Julie Sprague"]);
+    expect(data.fields.team_members.itemConflicts?.map((c) => [c.key, c.on])).toEqual([["Pal Manhas", ["name"]]]);
+
+    const apart = mergeFindings(ABOUT_V1, [
+      finding("team_members", [{ name: "Pal Manhas", role: "Registered Clinical Counsellor" }], "Pal Manhas", TEAM),
+      finding("team_members", [{ name: "Palvinder Manhas-Bains", role: "Registered Clinical Counsellor" }], "Palvinder Manhas-Bains", profile),
+    ]);
+    expect(names(apart.data.fields.team_members.value)).toEqual(["Pal Manhas", "Palvinder Manhas-Bains"]);
+  });
+
+  it("keeps two names read from one page's text apart, even a typo apart", () => {
+    const { data } = mergeFindings(ABOUT_V1, [
+      finding("team_members", [{ name: "Swetha Ranasuirya", role: "Registered Clinical Counsellor" }], "Swetha Ranasuirya", TEAM),
+      finding("team_members", [{ name: "Swetha Ranasuriya", role: "Art Therapist" }], "Swetha Ranasuriya", TEAM),
+    ]);
+    expect(names(data.fields.team_members.value)).toEqual(["Swetha Ranasuirya", "Swetha Ranasuriya"]);
+    // The same two spellings from JSON-LD and the text of one page are one person with a name conflict.
+    const crossSource = mergeFindings(ABOUT_V1, [
+      finding("team_members", [{ name: "Swetha Ranasuriya" }], '{"name": "Swetha Ranasuriya"}', TEAM, { source: "jsonld" }),
+      finding("team_members", [{ name: "Swetha Ranasuirya" }], "Swetha Ranasuirya", TEAM),
+    ]);
+    expect(crossSource.data.fields.team_members.value).toHaveLength(1);
+    expect(crossSource.data.fields.team_members.itemConflicts?.[0].on).toEqual(["name"]);
+  });
+
+  it("still joins a dropped middle initial and a first name on the same page", () => {
+    const { data } = mergeFindings(ABOUT_V1, [
+      finding("founders", [{ name: "Chris M. Walker", title: "Founder and CEO" }], "Chris M. Walker, Founder and CEO", ABOUT),
+      finding("founders", [{ name: "Chris Walker", title: "Founder and CEO" }], "Chris Walker started Legiit", ABOUT),
+      finding("founders", [{ name: "Jim Sabellico", title: "Co-founder and CTO" }], "Jim Sabellico, Co-founder and CTO", ABOUT),
+      finding("founders", [{ name: "Jim", title: "Co-founder and CTO" }], "Jim runs engineering", ABOUT),
+    ]);
+    expect(names(data.fields.founders.value)).toEqual(["Chris M. Walker", "Jim Sabellico"]);
+    expect(data.fields.founders.itemConflicts?.map((c) => c.key)).toEqual(["Chris M. Walker", "Jim Sabellico"]);
+  });
+
+  it("keeps different people with near names apart", () => {
+    const { data } = mergeFindings(ABOUT_V1, [
+      finding("team_members", [{ name: "Mark Bailey", role: "Therapist" }], "Mark Bailey", TEAM),
+      finding("team_members", [{ name: "Mary Bailey", role: "Therapist" }], "Mary Bailey", `${TEAM}mary-bailey/`),
+      finding("team_members", [{ name: "Chris Walker", role: "Therapist" }], "Chris Walker", TEAM),
+      finding("team_members", [{ name: "Chris Walter", role: "Therapist" }], "Chris Walter", `${TEAM}chris-walter/`),
+    ]);
+    expect(names(data.fields.team_members.value)).toEqual(["Mark Bailey", "Mary Bailey", "Chris Walker", "Chris Walter"]);
+  });
+});
+
+describe("mergeFindings social profile owners", () => {
+  const BLOG = "https://legiit.com/blog/how-to-hire/";
+  const link = (url: string, page: string): Finding =>
+    finding("social_profiles", [{ platform: "youtube", url, owner: "" }], url, page, {
+      source: "link",
+      confidence: 0.8,
+      derived: true,
+      note: `linked from ${new URL(page).pathname.replace(/\/+$/, "") || "the home page"}; confirm whose profile this is`,
+    });
+
+  it("takes the owner from a Person node's sameAs and drops the link's caveat", () => {
+    const { data } = mergeFindings(ABOUT_V1, [
+      link("https://www.youtube.com/@ChrisMWalker", ABOUT),
+      finding("social_profiles", [{ platform: "youtube", url: "https://www.youtube.com/@ChrisMWalker", owner: "Chris M. Walker" }], "https://www.youtube.com/@ChrisMWalker", ABOUT, { source: "jsonld" }),
+    ]);
+    const social = data.fields.social_profiles;
+    expect(social.value).toEqual([{ platform: "youtube", url: "https://www.youtube.com/@ChrisMWalker", owner: "Chris M. Walker" }]);
+    expect(social.itemConflicts).toBeUndefined();
+    expect(social.derived).toBeUndefined();
+    expect(social.note).toBeUndefined();
+  });
+
+  it("gives a profile linked from two or more pages to the business, and leaves a one-page link unclaimed", () => {
+    const { data } = mergeFindings(ABOUT_V1, [
+      link("https://www.youtube.com/@LegiitOfficial", HOME),
+      link("https://www.youtube.com/@LegiitOfficial/", ABOUT),
+      link("https://www.youtube.com/@GuestWriter", BLOG),
+    ]);
+    const social = data.fields.social_profiles;
+    expect(social.value).toEqual([
+      { platform: "youtube", url: "https://www.youtube.com/@LegiitOfficial", owner: "business" },
+      { platform: "youtube", url: "https://www.youtube.com/@GuestWriter" },
+    ]);
+    expect(social.derived).toBeUndefined();
+    expect(social.note).toBe("linked from /blog/how-to-hire; confirm whose profile this is");
+
+    const unclaimed = mergeFindings(ABOUT_V1, [link("https://www.youtube.com/@GuestWriter", BLOG)]).data.fields.social_profiles;
+    expect(unclaimed.derived).toBe(true);
+  });
+
+  it("never gives a LinkedIn personal profile to the business", () => {
+    const personal = (page: string) =>
+      finding("social_profiles", [{ platform: "linkedin", url: "https://www.linkedin.com/in/superstarseo/", owner: "" }], "https://www.linkedin.com/in/superstarseo/", page, { source: "link", derived: true });
+    const { data } = mergeFindings(ABOUT_V1, [personal(HOME), personal(ABOUT)]);
+    expect(data.fields.social_profiles.value).toEqual([{ platform: "linkedin", url: "https://www.linkedin.com/in/superstarseo/" }]);
+    expect(data.fields.social_profiles.derived).toBe(true);
+  });
+
+  it("shows a conflict when the organization and a person both claim a profile", () => {
+    const url = "https://www.instagram.com/cmwlegiit/";
+    const { data } = mergeFindings(ABOUT_V1, [
+      finding("social_profiles", [{ platform: "instagram", url, owner: "business" }], url, HOME, { source: "jsonld" }),
+      finding("social_profiles", [{ platform: "instagram", url, owner: "Chris M. Walker" }], url, ABOUT, { source: "jsonld" }),
+    ]);
+    expect(data.fields.social_profiles.itemConflicts).toEqual([
+      expect.objectContaining({ key: url, on: ["owner"] }),
+    ]);
+  });
+});
+
 describe("mergeFindings missing fields and stats", () => {
   it("gives every spec field without findings the missing shape", () => {
     const { data } = mergeFindings(ABOUT_V1, []);

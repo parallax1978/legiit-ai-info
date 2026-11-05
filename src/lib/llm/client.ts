@@ -6,6 +6,9 @@ import type { z } from "zod";
 import { config, type ModelId } from "@/config";
 import { createServiceClient } from "@/lib/supabase/service";
 import { estimateCostUsd, type TokenUsage } from "./cost";
+import { classifyStructured, StructuredCallError, thinkingParam, usageOf, type ThinkingMode } from "./structured";
+
+export { StructuredCallError, type StructuredFailureKind, type ThinkingMode } from "./structured";
 
 let client: Anthropic | null = null;
 
@@ -21,6 +24,13 @@ export function getAnthropic(): Anthropic {
   });
   return client;
 }
+
+/**
+ * Thinking for a call that does not set it: the model's own default. Callers
+ * pass "disabled" where a reasoning pass buys nothing (page extraction). This
+ * is the flag config.ts can take over.
+ */
+export const DEFAULT_THINKING: ThinkingMode = "model";
 
 export interface CallContext {
   userId?: string | null;
@@ -47,24 +57,39 @@ export interface StructuredCallOptions<S extends z.ZodType> {
   schema: S;
   maxTokens?: number;
   effort?: "low" | "medium" | "high";
+  /** DEFAULT_THINKING when left out. */
+  thinking?: ThinkingMode;
   /** Mark the system prompt for prompt caching. */
   cacheSystem?: boolean;
   ctx: CallContext;
 }
 
+function errorText(error: unknown): string {
+  if (error instanceof Anthropic.APIError) return `${error.status ?? "network"}: ${error.message}`;
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 /**
  * One structured-output call, with the model, tokens, cost, and duration
- * written to llm_calls whether it succeeds or fails. Throws on failure after
- * logging.
+ * written to llm_calls on every path: success, refusal, a max_tokens cut-off,
+ * output that is not JSON or does not match the schema, and API errors. The
+ * response is parsed here rather than by messages.parse, so a billed call
+ * whose output cannot be used is still logged with its usage. Throws after
+ * logging: the SDK's error when the request failed, a StructuredCallError
+ * (with usage and cost) when the response could not be used.
  */
 export async function callStructured<S extends z.ZodType>(
   opts: StructuredCallOptions<S>,
 ): Promise<StructuredCallResult<z.infer<S>>> {
   const anthropic = getAnthropic();
+  const format = zodOutputFormat(opts.schema);
+  const thinking = thinkingParam(opts.thinking ?? DEFAULT_THINKING);
   const started = Date.now();
 
+  let response: Anthropic.Message;
   try {
-    const response = await anthropic.messages.parse({
+    response = await anthropic.messages.create({
       model: opts.model,
       max_tokens: opts.maxTokens ?? config.extract.maxOutputTokens,
       system: opts.cacheSystem
@@ -72,51 +97,42 @@ export async function callStructured<S extends z.ZodType>(
         : opts.system,
       messages: [{ role: "user", content: opts.user }],
       output_config: {
-        format: zodOutputFormat(opts.schema),
+        format: { type: "json_schema", schema: format.schema },
         ...(opts.effort ? { effort: opts.effort } : {}),
       },
+      ...(thinking ? { thinking } : {}),
     });
+  } catch (error) {
+    // No response came back (an HTTP error, a network error, a timeout), so there is no usage to record.
+    await logCall(opts, { inputTokens: 0, outputTokens: 0 }, 0, Date.now() - started, false, errorText(error));
+    throw error;
+  }
 
-    const usage: TokenUsage = {
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
-      cacheWriteTokens: response.usage.cache_creation_input_tokens ?? 0,
-    };
-    const costUsd = estimateCostUsd(opts.model, usage);
-    const durationMs = Date.now() - started;
+  const usage = usageOf(response.usage);
+  const costUsd = estimateCostUsd(opts.model, usage);
+  const durationMs = Date.now() - started;
+  const outcome = classifyStructured(response, opts.schema);
 
-    if (response.stop_reason === "refusal") {
-      await logCall(opts, usage, costUsd, durationMs, false, "refusal");
-      throw new Error("The model declined this request.");
-    }
-    if (response.parsed_output == null) {
-      await logCall(opts, usage, costUsd, durationMs, false, `unparsed (${response.stop_reason})`);
-      throw new Error(`The model returned no parsable output (stop reason ${response.stop_reason}).`);
-    }
-
-    await logCall(opts, usage, costUsd, durationMs, true, null);
-    return {
-      parsed: response.parsed_output as z.infer<S>,
+  if (!outcome.ok) {
+    await logCall(opts, usage, costUsd, durationMs, false, `${outcome.kind}: ${outcome.message}`);
+    throw new StructuredCallError(outcome.kind, outcome.message, {
       usage,
       costUsd,
       durationMs,
       model: opts.model,
       stopReason: response.stop_reason,
-    };
-  } catch (error) {
-    if (error instanceof Anthropic.APIError) {
-      await logCall(
-        opts,
-        { inputTokens: 0, outputTokens: 0 },
-        0,
-        Date.now() - started,
-        false,
-        `${error.status ?? "network"}: ${error.message}`,
-      );
-    }
-    throw error;
+    });
   }
+
+  await logCall(opts, usage, costUsd, durationMs, true, null);
+  return {
+    parsed: outcome.parsed,
+    usage,
+    costUsd,
+    durationMs,
+    model: opts.model,
+    stopReason: response.stop_reason,
+  };
 }
 
 async function logCall<S extends z.ZodType>(
@@ -129,7 +145,7 @@ async function logCall<S extends z.ZodType>(
 ) {
   try {
     const db = createServiceClient();
-    await db.from("llm_calls").insert({
+    const { error: insertError } = await db.from("llm_calls").insert({
       user_id: opts.ctx.userId ?? null,
       project_id: opts.ctx.projectId ?? null,
       run_id: opts.ctx.runId ?? null,
@@ -145,6 +161,7 @@ async function logCall<S extends z.ZodType>(
       ok,
       error,
     });
+    if (insertError) console.error("llm_calls insert failed", insertError.message);
   } catch (e) {
     console.error("llm_calls insert failed", e);
   }

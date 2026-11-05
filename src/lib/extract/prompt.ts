@@ -44,6 +44,7 @@ export function buildSystemPrompt(spec: TemplateSpec): string {
     "Rules",
     "- One finding per fact. A page can give several findings for the same field (two prices, two spellings of a name, a date and a years-in-business claim). Report each one; do not pick between them.",
     "- Every finding carries a quote copied from the page text character for character: no paraphrase, no ellipsis, no added or dropped words, at most 300 characters. The quote must contain the fact. A finding whose quote cannot be found in the page text is thrown away, so a short exact quote beats a long approximate one.",
+    "- Every number in a value (a price, a year, a day, a phone number, a count) must appear in its quote. A value whose numbers are not in the quote is thrown away too, so quote the words that state the number.",
     "- Never invent, never fill in from general knowledge, never report a field without a quote. If the page does not state it, leave it out.",
     "- Prefer specific numbers, names, dates, prices, places, and credentials over general statements and slogans.",
     '- kind "scalar": put the fact in value as a short string and leave item empty. Keep the page\'s own wording; do not rewrite it into a sentence.',

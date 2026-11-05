@@ -142,6 +142,7 @@ describe("findingsFromJsonLd", () => {
       [{ name: "Darcy Bailey Counselling" }],
       [{ name: "Darcy Bailey and Associates" }],
     ]);
+    // The organization's sameAs is the business's; the founder's Person sameAs is hers.
     expect(byField(findings, "social_profiles").map((f) => [f.value, f.quote])).toEqual([
       [
         [{ platform: "facebook", url: "https://www.facebook.com/darcybaileycounselling", owner: "business" }],
@@ -151,7 +152,16 @@ describe("findingsFromJsonLd", () => {
         [{ platform: "instagram", url: "https://www.instagram.com/dbailey_associatescounselling/", owner: "business" }],
         "https://www.instagram.com/dbailey_associatescounselling/",
       ],
+      [
+        [{ platform: "linkedin", url: "https://www.linkedin.com/in/darcybailey/", owner: "Darcy Bailey" }],
+        "https://www.linkedin.com/in/darcybailey/",
+      ],
+      [
+        [{ platform: "youtube", url: "https://www.youtube.com/@darcybailey", owner: "Darcy Bailey" }],
+        "https://www.youtube.com/@darcybailey",
+      ],
     ]);
+    expect(byField(findings, "social_profiles").every((f) => !f.derived)).toBe(true);
     expect(values(findings, "awards")).toEqual([
       [{ name: "Canadian Choice Award Winner, Mental Health Services, Langley (2024)" }],
       [{ name: "Canadian Choice Award Winner (2025)" }],
@@ -230,12 +240,54 @@ describe("findingsFromLinks", () => {
     });
   });
 
-  it("maps profile links, skips share links, and reads twitter as x", () => {
+  it("maps profile links with no owner, marked derived, skips share links, and reads twitter as x", () => {
     expect(values(findings, "social_profiles")).toEqual([
-      [{ platform: "facebook", url: "https://www.facebook.com/darcybaileycounselling", owner: "business" }],
-      [{ platform: "x", url: "https://twitter.com/darcybailey", owner: "business" }],
+      [{ platform: "facebook", url: "https://www.facebook.com/darcybaileycounselling", owner: "" }],
+      [{ platform: "x", url: "https://twitter.com/darcybailey", owner: "" }],
     ]);
+    for (const f of byField(findings, "social_profiles")) {
+      expect(f).toMatchObject({ derived: true, note: "linked from /about-us; confirm whose profile this is" });
+    }
     expect(values(findings, "map_url")).toEqual(["https://maps.app.goo.gl/9XSJ3jDrWSiEznJY9"]);
+  });
+
+  it("does not hand a founder's or a guest author's linked profile to the business", () => {
+    const post = "https://legiit.com/blog/guest-post/";
+    const [guest] = findingsFromLinks({ social: [{ platform: "linkedin", url: "https://www.linkedin.com/in/guest-writer/" }] }, post);
+    expect(guest.value).toEqual([{ platform: "linkedin", url: "https://www.linkedin.com/in/guest-writer/", owner: "" }]);
+    expect(guest.note).toBe("linked from /blog/guest-post; confirm whose profile this is");
+    const [home] = findingsFromLinks({ social: [{ platform: "youtube", url: "https://www.youtube.com/@ChrisMWalker" }] }, "https://legiit.com/");
+    expect(home.note).toBe("linked from the home page; confirm whose profile this is");
+  });
+});
+
+describe("findingsFromJsonLd person profiles", () => {
+  it("gives a Person node's sameAs that person's name as owner, wherever the node sits", () => {
+    const article: Json = {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: "How to hire a freelancer",
+      author: { "@type": "Person", name: "Guest Writer", sameAs: ["https://www.linkedin.com/in/guest-writer/"] },
+    };
+    const profile: Json = {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      givenName: "Chris",
+      familyName: "Walker",
+      sameAs: "https://www.youtube.com/@ChrisMWalker",
+    };
+    const findings = findingsFromJsonLd(
+      [
+        { data: article, raw: JSON.stringify(article), types: ["BlogPosting"] },
+        { data: profile, raw: JSON.stringify(profile), types: ["Person"] },
+      ],
+      "https://legiit.com/blog/how-to-hire/",
+    );
+    expect(values(findings, "social_profiles")).toEqual([
+      [{ platform: "linkedin", url: "https://www.linkedin.com/in/guest-writer/", owner: "Guest Writer" }],
+      [{ platform: "youtube", url: "https://www.youtube.com/@ChrisMWalker", owner: "Chris Walker" }],
+    ]);
+    expect(byField(findings, "company_name")).toEqual([]);
   });
 });
 

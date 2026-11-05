@@ -10,7 +10,8 @@ import type { TemplateSpec } from "./types";
 
 export const ABOUT_V1: TemplateSpec = {
   id: "about-v1",
-  version: 1,
+  // 2: social_profiles conflicts on owner. Raising it re-seeds the templates table.
+  version: 2,
   name: "About page (eight sections)",
   description:
     "Value proposition, what the company does, what makes it different, who uses it, the team, how it works, key facts table, and FAQ, with Organization or LocalBusiness schema plus AboutPage and FAQPage.",
@@ -797,6 +798,8 @@ export const ABOUT_V1: TemplateSpec = {
       ],
       itemKind: "social",
       dedupeKey: "url",
+      // A profile the organization's JSON-LD claims and a Person node also claims is shown as a conflict.
+      conflictOn: ["owner"],
       schemaProperty: "sameAs",
     },
   ],

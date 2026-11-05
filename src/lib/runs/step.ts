@@ -37,6 +37,7 @@ import type { CrawlRunRow, Json, ProjectRow, RunLogEntry } from "@/lib/db/types"
 import type { FactSheetData } from "@/lib/facts/types";
 import { mergeFindings } from "@/lib/extract/merge";
 import { deterministicFindings, extractPage, type ExtractPageResult } from "@/lib/extract/page";
+import { StructuredCallError } from "@/lib/llm/client";
 import { runViewFromRow, type RunView } from "@/lib/projects/view";
 import { putHtml } from "@/lib/storage";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -98,6 +99,17 @@ class LeaseLostError extends Error {
     super("The run lock passed to another caller.");
     this.name = "LeaseLostError";
   }
+}
+
+/**
+ * A model answer that was usable on no try: the same page fails the same way
+ * again, so it is not retried. (Timeouts and API errors are.)
+ */
+function finalExtractionFailure(reason: unknown): boolean {
+  return (
+    reason instanceof StructuredCallError &&
+    (reason.kind === "refusal" || reason.kind === "max_tokens" || reason.kind === "context_window")
+  );
 }
 
 /** The Crawl-delay robots.txt asked for, in milliseconds, capped so a step still makes progress. */
@@ -653,11 +665,13 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
     group.forEach((page, i) => outcomes.set(page.id, settled[i]));
   }
 
-  // Every page of a batch failing the same way (no API key, the API down) is a step error, not a
-  // page error: nothing is written, the queue is kept, and the run fails after the usual three
-  // tries. A single page is handled below so one flaky page at the end of the queue cannot fail the run.
+  // Every request of a batch failing (no API key, the API down) is a step error, not a page
+  // error: nothing is written, the queue is kept, and the run fails after the usual three tries.
+  // Answers the model gave but that could not be used are page problems and are handled below,
+  // as is a single page, so one flaky page at the end of the queue cannot fail the run.
   const rejected = [...outcomes.values()].filter((r): r is PromiseRejectedResult => r.status === "rejected");
-  if (pages.length > 1 && rejected.length === pages.length) {
+  const requestFailures = rejected.filter((r) => !(r.reason instanceof StructuredCallError));
+  if (pages.length > 1 && requestFailures.length === pages.length) {
     throw new Error(`Extraction failed: ${errorText(rejected[0].reason)}`);
   }
 
@@ -687,7 +701,7 @@ async function extractStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRun
     } else {
       const message = errorText(outcome.reason);
       attempts[id] = (attempts[id] ?? 0) + 1;
-      if (attempts[id] < config.llm.extractAttempts) {
+      if (attempts[id] < config.llm.extractAttempts && !finalExtractionFailure(outcome.reason)) {
         // A timeout or a transient API error: the page goes to the back of the queue for one more try.
         retry.push(id);
         log = appendLog(log, "warn", `Could not pull facts from ${page.url} (${message}); will try once more`);

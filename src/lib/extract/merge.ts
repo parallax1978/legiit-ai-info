@@ -17,7 +17,14 @@ import {
   type ListItemConflict,
 } from "@/lib/facts/types";
 import type { TemplateField, TemplateSpec } from "@/templates/types";
-import { normalizeForCompare, normalizeItemKey, normalizeUrl, personNameKey, samePerson } from "./normalize";
+import {
+  middleNameDropped,
+  normalizeForCompare,
+  normalizeItemKey,
+  normalizeUrl,
+  personNameKey,
+  samePerson,
+} from "./normalize";
 
 /** Evidence entries kept per list field; the earliest win. */
 export const MAX_LIST_EVIDENCE = 20;
@@ -163,8 +170,17 @@ function mergeScalar(field: TemplateField, findings: Finding[]): FactField {
 // Lists
 // ---------------------------------------------------------------------------
 
-type Variant = { item: ListItem; evidence: Evidence[]; order: number };
-type MergedItem = { item: ListItem; variants: Variant[] };
+type Variant = {
+  item: ListItem;
+  evidence: Evidence[];
+  order: number;
+  /** The page and source this variant was read from. */
+  from: Evidence;
+  derived: boolean;
+  note?: string;
+};
+/** promoted: the owner was set by the site-wide rule (see promoteSiteWideProfiles). */
+type MergedItem = { item: ListItem; variants: Variant[]; promoted?: boolean };
 
 function itemsOf(field: TemplateField, f: Finding): ListItem[] {
   if (Array.isArray(f.value)) return f.value;
@@ -199,14 +215,108 @@ function dedupeKeyOf(field: TemplateField): string {
   return field.itemShape?.[0]?.key ?? "";
 }
 
-function sameItem(field: TemplateField, a: ListItem, b: ListItem): boolean {
-  const key = dedupeKeyOf(field);
-  if (field.itemKind === "person") {
-    const ua = normalizeUrl(a.url ?? "");
-    const ub = normalizeUrl(b.url ?? "");
-    if (ua && ub && ua === ub) return true;
-    return samePerson(a[key] ?? "", b[key] ?? "");
+/** Name-key tokens with hyphenated parts split, so "manhas-bains" counts as "manhas" and "bains". */
+function nameParts(tokens: string[]): Set<string> {
+  return new Set(tokens.flatMap((t) => t.split("-")).filter((t) => t.length > 1));
+}
+
+function sharesNamePart(a: string[], b: string[]): boolean {
+  const partsOfB = nameParts(b);
+  for (const part of nameParts(a)) if (partsOfB.has(part)) return true;
+  return false;
+}
+
+/** The url-typed keys of a person item: profile page, LinkedIn, YouTube, and so on. */
+function linkKeysOf(field: TemplateField): string[] {
+  const keys = (field.itemShape ?? []).filter((s) => s.type === "url").map((s) => s.key);
+  return keys.length ? keys : ["url"];
+}
+
+/**
+ * The profile links of one variant, apart from a link to the page the variant
+ * was read from (ownPage), which a model fills in for everyone on a team page.
+ */
+function linksOf(field: TemplateField, v: Variant): { links: Set<string>; ownPage: string | null } {
+  const page = normalizeUrl(v.from.url);
+  const links = new Set<string>();
+  let ownPage: string | null = null;
+  for (const key of linkKeysOf(field)) {
+    const link = normalizeUrl(v.item[key] ?? "");
+    if (!link) continue;
+    if (link === page) ownPage = page;
+    else links.add(link);
   }
+  return { links, ownPage };
+}
+
+/**
+ * True when two variants point at the same profile. Two links to the page
+ * each was read from are not compared (everyone on /our-team/ would match),
+ * but a variant read from a profile page that gives that page as its own does
+ * match a variant elsewhere that links to it.
+ */
+function shareProfileLink(field: TemplateField, a: Variant, b: Variant): boolean {
+  const la = linksOf(field, a);
+  const lb = linksOf(field, b);
+  for (const link of la.links) if (lb.links.has(link)) return true;
+  return (lb.ownPage !== null && la.links.has(lb.ownPage)) || (la.ownPage !== null && lb.links.has(la.ownPage));
+}
+
+function samePage(a: Variant, b: Variant): boolean {
+  const page = normalizeUrl(a.from.url);
+  return !!page && page === normalizeUrl(b.from.url);
+}
+
+/**
+ * Whether a person variant is the person a merged item already describes.
+ * - The same name key is the same person.
+ * - Two different full names the extractor read from one page's text are two
+ *   people (a team page lists each person once), unless one only leaves out
+ *   the other's middle name or initial.
+ * - Names a typo apart, or with a middle name left out, are the same person.
+ * - A single name that is part of a full name ("Jim" / "Jim Sabellico") is the
+ *   same person when the two share a profile link or a page.
+ * - Two full names that share a profile link are the same person only when
+ *   they also share a name ("Pal Manhas" / "Palvinder Manhas-Bains"); a shared
+ *   link alone never joins two different people.
+ */
+function samePersonItem(field: TemplateField, target: MergedItem, v: Variant): boolean {
+  const key = dedupeKeyOf(field);
+  const nameKey = personNameKey(v.item[key] ?? "");
+  if (!nameKey) return false;
+  const tokens = nameKey.split(" ");
+  const known = target.variants
+    .map((x) => ({ x, nameKey: personNameKey(x.item[key] ?? "") }))
+    .filter((k) => k.nameKey.length > 0);
+  if (known.some((k) => k.nameKey === nameKey)) return true;
+
+  if (tokens.length >= 2 && v.from.source === "page") {
+    for (const k of known) {
+      const other = k.nameKey.split(" ");
+      if (k.x.from.source !== "page" || !samePage(k.x, v) || other.length < 2) continue;
+      if (!middleNameDropped(other, tokens)) return false;
+    }
+  }
+
+  for (const k of known) {
+    if (samePerson(k.nameKey, nameKey)) return true;
+    const other = k.nameKey.split(" ");
+    if (!sharesNamePart(other, tokens)) continue;
+    const sharedLink = shareProfileLink(field, k.x, v);
+    if (other.length === 1 || tokens.length === 1) {
+      if (sharedLink || samePage(k.x, v)) return true;
+    } else if (sharedLink) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sameItem(field: TemplateField, target: MergedItem, v: Variant): boolean {
+  if (field.itemKind === "person") return samePersonItem(field, target, v);
+  const key = dedupeKeyOf(field);
+  const a = target.item;
+  const b = v.item;
   if (field.itemKind === "social") {
     const ua = normalizeUrl(a[key] ?? "");
     const ub = normalizeUrl(b[key] ?? "");
@@ -262,20 +372,68 @@ function conflictsOf(field: TemplateField, merged: MergedItem): ListItemConflict
   return { key: merged.item[nameKey] ?? Object.values(merged.item)[0] ?? "", on: disagreeing, candidates };
 }
 
+/** A LinkedIn /in/ (or old /pub/) link is always a person's profile, never a company page. */
+const PERSONAL_PROFILE_LINK = /linkedin\.com\/(?:in|pub)\//i;
+
+/**
+ * Footer icons are on every page, so a profile nobody has claimed (no owner
+ * from JSON-LD) that is linked from two or more pages is the business's own.
+ * The owner is set to "business" and the item no longer counts as derived.
+ */
+function promoteSiteWideProfiles(field: TemplateField, merged: MergedItem[]): void {
+  if (!(field.itemShape ?? []).some((s) => s.key === "owner")) return;
+  const linkKey = dedupeKeyOf(field);
+  for (const m of merged) {
+    if (m.item.owner || PERSONAL_PROFILE_LINK.test(m.item[linkKey] ?? "")) continue;
+    const pages = new Set(m.variants.map((v) => normalizeUrl(v.from.url)).filter(Boolean));
+    if (pages.size < 2) continue;
+    m.item.owner = "business";
+    m.promoted = true;
+  }
+}
+
+function itemDerived(m: MergedItem): boolean {
+  return !m.promoted && m.variants.every((v) => v.derived);
+}
+
+/**
+ * Up to three notes, in finding order. The caveat on a derived variant ("linked
+ * from /about; confirm whose profile this is") is left out once another source
+ * or the site-wide rule has confirmed its item.
+ */
+function listNote(merged: MergedItem[]): string | undefined {
+  const entries: { order: number; note: string }[] = [];
+  for (const m of merged) {
+    const confirmed = !itemDerived(m);
+    for (const v of m.variants) {
+      if (v.note && !(v.derived && confirmed)) entries.push({ order: v.order, note: v.note });
+    }
+  }
+  entries.sort((a, b) => a.order - b.order);
+  const notes: string[] = [];
+  for (const { note } of entries) {
+    if (!notes.includes(note)) notes.push(note);
+    if (notes.length === 3) break;
+  }
+  return notes.length ? notes.join("; ") : undefined;
+}
+
 function mergeList(field: TemplateField, findings: Finding[]): FactField {
   const merged: MergedItem[] = [];
-  const contributing: Finding[] = [];
   const evidence: Evidence[] = [];
   let order = 0;
 
   for (const f of findings) {
     let used = false;
+    const note = f.note?.trim();
     for (const raw of itemsOf(field, f)) {
       const item = cleanItem(field, raw);
       if (!item) continue;
       used = true;
-      const variant: Variant = { item, evidence: [evidenceOf(f)], order: order++ };
-      const target = merged.find((m) => sameItem(field, m.item, item));
+      const from = evidenceOf(f);
+      const variant: Variant = { item, evidence: [from], order: order++, from, derived: f.derived === true };
+      if (note) variant.note = note;
+      const target = merged.find((m) => sameItem(field, m, variant));
       if (target) {
         for (const [key, value] of Object.entries(item)) {
           if (!target.item[key] && value) target.item[key] = value;
@@ -285,12 +443,11 @@ function mergeList(field: TemplateField, findings: Finding[]): FactField {
         merged.push({ item: { ...item }, variants: [variant] });
       }
     }
-    if (used) {
-      contributing.push(f);
-      evidence.push(evidenceOf(f));
-    }
+    if (used) evidence.push(evidenceOf(f));
   }
   if (!merged.length) return emptyField();
+
+  if (field.itemKind === "social") promoteSiteWideProfiles(field, merged);
 
   const out: FactField = {
     value: merged.map((m) => m.item),
@@ -299,8 +456,8 @@ function mergeList(field: TemplateField, findings: Finding[]): FactField {
   };
   const itemConflicts = merged.map((m) => conflictsOf(field, m)).filter((c): c is ListItemConflict => c !== null);
   if (itemConflicts.length) out.itemConflicts = itemConflicts;
-  if (contributing.every((f) => f.derived === true)) out.derived = true;
-  const note = joinNotes(contributing);
+  if (merged.every(itemDerived)) out.derived = true;
+  const note = listNote(merged);
   if (note) out.note = note;
   return out;
 }

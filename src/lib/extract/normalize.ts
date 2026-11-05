@@ -247,26 +247,74 @@ export function levenshtein(a: string, b: string): number {
   return prev[b.length];
 }
 
+/** True when b is a with two neighbouring letters swapped ("ranasuirya" / "ranasuriya"). */
+function swappedNeighbours(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let i = 0;
+  while (i < a.length && a[i] === b[i]) i++;
+  if (i >= a.length - 1) return false;
+  return a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2);
+}
+
+/** True when the longer of a and b is the shorter with one letter doubled ("philips" / "phillips"). */
+function doubledLetter(a: string, b: string): boolean {
+  const [short, long] = a.length < b.length ? [a, b] : [b, a];
+  if (long.length !== short.length + 1) return false;
+  let i = 0;
+  while (i < short.length && short[i] === long[i]) i++;
+  const extra = long[i];
+  return (extra === long[i - 1] || extra === long[i + 1]) && short.slice(i) === long.slice(i + 1);
+}
+
 /**
- * Same person when the name keys match, differ by a small typo (distance 2 or
- * less on keys longer than 5 characters), or one is the other's first and last
- * name with the middle name or initial left out.
+ * Two name tokens a typo apart. Tokens under five letters must match exactly
+ * (Mark / Mary, Dan / Dana, Jon / Joe are different people). Longer tokens may
+ * swap two neighbouring letters or double one. Only a surname of eight letters
+ * or more may also differ by one other edit (MacWilliams / McWilliams), because
+ * a one-letter change in a shorter name is usually another name (Walker /
+ * Walter) and first names come in near pairs (Christina / Christine).
+ */
+function nameTokensClose(a: string, b: string, surname: boolean): boolean {
+  if (a === b) return true;
+  const shorter = Math.min(a.length, b.length);
+  if (shorter < 5) return false;
+  if (swappedNeighbours(a, b) || doubledLetter(a, b)) return true;
+  return surname && shorter >= 8 && levenshtein(a, b) <= 1;
+}
+
+/**
+ * True when one name is the other's first and last name with the middle names
+ * or initials left out ("chris walker" / "chris m walker"). Takes name-key tokens.
+ */
+export function middleNameDropped(a: string[], b: string[]): boolean {
+  if (a.length < 2 || b.length < 2 || a.length === b.length) return false;
+  const [shorter, longer] = a.length < b.length ? [a, b] : [b, a];
+  return shorter.length === 2 && shorter[0] === longer[0] && shorter[1] === longer[longer.length - 1];
+}
+
+/**
+ * Same person when the name keys match, when they have the same number of
+ * tokens and exactly one token is a typo of the other (see nameTokensClose), or
+ * when one is the other's first and last name with the middle name or initial
+ * left out. A first name alone never matches a full name here; the merge
+ * decides that case with the profile URL and the page.
  */
 export function samePerson(a: string, b: string): boolean {
   const ka = personNameKey(a);
   const kb = personNameKey(b);
   if (!ka || !kb) return false;
   if (ka === kb) return true;
-  if (Math.min(ka.length, kb.length) > 5 && levenshtein(ka, kb) <= 2) return true;
   const ta = ka.split(" ");
   const tb = kb.split(" ");
-  if (ta.length >= 2 && tb.length >= 2 && ta.length !== tb.length) {
-    const [shorter, longer] = ta.length < tb.length ? [ta, tb] : [tb, ta];
-    if (shorter.length === 2 && shorter[0] === longer[0] && shorter[1] === longer[longer.length - 1]) {
-      return true;
-    }
+  if (ta.length !== tb.length) return middleNameDropped(ta, tb);
+  let differing = 0;
+  for (let i = 0; i < ta.length; i++) {
+    if (ta[i] === tb[i]) continue;
+    differing++;
+    const surname = ta.length > 1 && i === ta.length - 1;
+    if (differing > 1 || !nameTokensClose(ta[i], tb[i], surname)) return false;
   }
-  return false;
+  return true;
 }
 
 const PLATFORM_HOSTS: [string, string][] = [

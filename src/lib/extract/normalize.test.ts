@@ -106,6 +106,22 @@ describe("samePerson", () => {
     expect(samePerson("Marija Jovanovic", "Djordje Jovanovic")).toBe(false);
     expect(samePerson("", "Jim Sabellico")).toBe(false);
   });
+
+  it("allows a typo in one name token, never a different short name", () => {
+    expect(samePerson("Mark Bailey", "Mary Bailey")).toBe(false);
+    expect(samePerson("Ann Lee", "Amy Lee")).toBe(false);
+    expect(samePerson("Jon Smith", "Joe Smith")).toBe(false);
+    expect(samePerson("Dan Brown", "Dana Brown")).toBe(false);
+    expect(samePerson("Chris Walker", "Chris Walter")).toBe(false);
+    expect(samePerson("Christina Walker", "Christine Walker")).toBe(false);
+    // Swapped neighbours, a doubled letter, or one edit in a long surname are typos.
+    expect(samePerson("Trish Rapske", "Trish Rapkse")).toBe(true);
+    expect(samePerson("Michelle Phillips", "Michelle Philips")).toBe(true);
+    expect(samePerson("Rhonda MacWilliams", "Rhonda McWilliams")).toBe(true);
+    expect(samePerson("Swetha Ranasuirya", "Swetha Ranasurya")).toBe(true);
+    // Two tokens off is two people.
+    expect(samePerson("Swteha Ranasuirya", "Swetha Ranasuriya")).toBe(false);
+  });
 });
 
 describe("platformFromUrl", () => {

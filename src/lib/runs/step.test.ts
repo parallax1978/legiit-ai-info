@@ -204,6 +204,7 @@ vi.mock("@/lib/crawler", async (importOriginal) => {
 });
 
 import { config } from "@/config";
+import { StructuredCallError } from "@/lib/llm/structured";
 import { pageKey } from "./logic";
 import { stepRun } from "./step";
 
@@ -523,5 +524,63 @@ describe("stepRun failures", () => {
 
     expect(run().status).toBe("done");
     expect(project()).toMatchObject({ latest_crawl_run_id: "run-newer", latest_fact_sheet_id: "sheet-v1" });
+  });
+});
+
+describe("stepRun and unusable model answers", () => {
+  const cutOff = () =>
+    new StructuredCallError("max_tokens", "The output was cut off at max_tokens.", {
+      usage: { inputTokens: 5000, outputTokens: 16000 },
+      costUsd: 0.0085,
+      durationMs: 30_000,
+      model: "claude-haiku-5-5",
+      stopReason: "max_tokens",
+    });
+
+  it("does not retry a page whose answer was cut off at max_tokens", async () => {
+    seed({ run: { status: "running", phase: "extract", pages_fetched: 1 } });
+    const only = addPage({ url: "https://acme.example.com/team", rank: 0, status: "fetched", text: "A very long team page" });
+    Object.assign(run(), { cursor: { homeUrl: "https://acme.example.com/", extractQueue: [only] } });
+    h.extractPage.mockImplementationOnce(async () => {
+      throw cutOff();
+    });
+
+    await stepRun(RUN, USER);
+
+    expect(h.state.pages.get(only)!.status).toBe("failed");
+    expect(run().phase).toBe("merge");
+    expect((run().cursor as { extractQueue: string[] }).extractQueue).toEqual([]);
+  });
+
+  it("treats a batch of unusable answers as page problems, not a step error", async () => {
+    seed({ run: { status: "running", phase: "extract", pages_fetched: 2 } });
+    const a = addPage({ url: "https://acme.example.com/a", rank: 0, status: "fetched", text: "Page a text here" });
+    const b = addPage({ url: "https://acme.example.com/b", rank: 1, status: "fetched", text: "Page b text here" });
+    Object.assign(run(), { cursor: { homeUrl: "https://acme.example.com/", extractQueue: [a, b] } });
+    h.extractPage.mockImplementation(async () => {
+      throw cutOff();
+    });
+
+    await stepRun(RUN, USER);
+    h.extractPage.mockReset();
+
+    expect((run().cursor as { errorCount?: number }).errorCount ?? 0).toBe(0);
+    expect([h.state.pages.get(a)!.status, h.state.pages.get(b)!.status]).toEqual(["failed", "failed"]);
+  });
+
+  it("still treats a batch of failed requests as a step error", async () => {
+    seed({ run: { status: "running", phase: "extract", pages_fetched: 2 } });
+    const a = addPage({ url: "https://acme.example.com/a", rank: 0, status: "fetched", text: "Page a text here" });
+    const b = addPage({ url: "https://acme.example.com/b", rank: 1, status: "fetched", text: "Page b text here" });
+    Object.assign(run(), { cursor: { homeUrl: "https://acme.example.com/", extractQueue: [a, b] } });
+    h.extractPage.mockImplementation(async () => {
+      throw new Error("ANTHROPIC_API_KEY is not set");
+    });
+
+    await stepRun(RUN, USER);
+    h.extractPage.mockReset();
+
+    expect((run().cursor as { errorCount?: number }).errorCount).toBe(1);
+    expect(h.state.pages.get(a)!.status).toBe("fetched");
   });
 });

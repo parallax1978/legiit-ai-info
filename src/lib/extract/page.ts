@@ -8,7 +8,7 @@ import "server-only";
 import { config, type ModelId } from "@/config";
 import type { JsonLdBlock, PageImage, PageLinks } from "@/lib/db/types";
 import type { Finding } from "@/lib/facts/types";
-import { callStructured, type CallContext } from "@/lib/llm/client";
+import { callStructured, type CallContext, type ThinkingMode } from "@/lib/llm/client";
 import type { TokenUsage } from "@/lib/llm/cost";
 import type { TemplateSpec } from "@/templates/types";
 import {
@@ -24,6 +24,12 @@ import { verifyFindings } from "./verify";
 
 /** Pages with less text than this skip the model and keep only the deterministic findings. */
 export const MIN_TEXT_CHARS = 40;
+
+/** Output tokens for one page's findings; see config.extract.maxOutputTokens. */
+export const EXTRACT_MAX_TOKENS = config.extract.maxOutputTokens;
+
+/** Extraction runs without a thinking pass; see config.extract.thinking. */
+export const EXTRACT_THINKING: ThinkingMode = config.extract.thinking;
 
 export interface ExtractPageInput {
   url: string;
@@ -111,14 +117,16 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractPageR
       existingJsonLdTypes: jsonLdTypes(input.jsonld),
     }),
     schema: ExtractionOutputSchema,
-    maxTokens: config.extract.maxOutputTokens,
+    maxTokens: EXTRACT_MAX_TOKENS,
+    // Disabled thinking is accepted at effort high or below.
     effort: "low",
+    thinking: EXTRACT_THINKING,
     cacheSystem: true,
     ctx: { ...input.ctx, purpose: input.ctx.purpose || "extract_page" },
   });
 
   const modelFindings = toFindings(result.parsed, { url: input.url, spec: input.spec });
-  const { kept, dropped } = verifyFindings(modelFindings, text);
+  const { kept, dropped } = verifyFindings(modelFindings, text, input.spec);
 
   return {
     findings: [...kept, ...deterministic],

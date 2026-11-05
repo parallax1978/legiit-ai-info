@@ -125,7 +125,18 @@ export const config = {
   extract: {
     pagesPerStep: 4,
     parallel: 4,
-    maxOutputTokens: 6_000,
+    /**
+     * Output tokens for one page's findings. A dense page (a team page, a long
+     * price list) runs to many findings, and a cut-off output is billed and
+     * thrown away, so the cap leaves room. Typical pages use 2,000 to 6,000.
+     */
+    maxOutputTokens: 16_000,
+    /**
+     * Extraction copies facts out of one page and needs no reasoning pass.
+     * Haiku 5.5 thinks by default and its thinking tokens count against
+     * max_tokens; disabled is accepted at effort high or below.
+     */
+    thinking: "disabled" as const,
   },
 
   llm: {

@@ -286,11 +286,15 @@ const PERSON_SOCIAL_KEYS: Record<string, string> = {
   website: "website",
 };
 
-function personItem(p: JsonObject | string, roleKey: "title" | "role", withSocial: boolean): ListItem | null {
-  if (typeof p === "string") return p.trim() ? { name: p.trim() } : null;
+function personName(p: JsonObject): string {
   const given = firstString(p.givenName);
   const family = firstString(p.familyName);
-  const name = firstString(p.name) ?? [given, family].filter(Boolean).join(" ");
+  return firstString(p.name) ?? [given, family].filter(Boolean).join(" ");
+}
+
+function personItem(p: JsonObject | string, roleKey: "title" | "role", withSocial: boolean): ListItem | null {
+  if (typeof p === "string") return p.trim() ? { name: p.trim() } : null;
+  const name = personName(p);
   if (!name) return null;
   const item: ListItem = { name };
   const role = firstString(p.jobTitle);
@@ -376,6 +380,7 @@ function mapOrganization(node: JsonObject, c: Collector): void {
       if (src) c.add("map_url", src, JSON.stringify(m));
     }
   }
+  // The organization's own node: its sameAs links are the business's profiles.
   for (const link of stringsOf(node.sameAs)) {
     const platform = platformFromUrl(link);
     if (!platform) continue;
@@ -429,6 +434,17 @@ function mapOrganization(node: JsonObject, c: Collector): void {
   }
 }
 
+/** A Person node's sameAs links are that person's profiles, wherever the node sits (founder, employee, author). */
+function mapPersonProfiles(node: JsonObject, c: Collector): void {
+  const owner = personName(node);
+  if (!owner) return;
+  for (const link of stringsOf(node.sameAs)) {
+    const platform = platformFromUrl(link);
+    if (!platform) continue;
+    c.add("social_profiles", [{ platform, url: link, owner }], link);
+  }
+}
+
 function mapQuestion(node: JsonObject, c: Collector): void {
   const question = firstString(node.name) ?? firstString(node.text);
   if (!question) return;
@@ -468,6 +484,7 @@ export function findingsFromJsonLd(blocks: JsonLdBlock[], url: string): Finding[
       if (!types.length) continue;
       const otherOrg = parentKey !== null && OTHER_ORG_KEYS.has(parentKey);
       if (!otherOrg && types.some(isOrgType)) mapOrganization(node, c);
+      if (types.includes("Person")) mapPersonProfiles(node, c);
       if (types.includes("Question")) mapQuestion(node, c);
       if (!otherOrg && types.includes("Service")) mapService(node, c);
     }
@@ -507,7 +524,22 @@ function isProfileLink(url: string): boolean {
   }
 }
 
-/** tel and mailto links, social profile links, and map links. */
+/** "/about" for a page, "the home page" for the root. */
+function pageLabel(url: string): string {
+  try {
+    const path = new URL(url).pathname.replace(/\/+$/, "");
+    return path ? safeDecode(path) : "the home page";
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * tel and mailto links, social profile links, and map links. A profile link on
+ * a page can belong to the business, the founder, or a guest author, so it
+ * carries no owner and is marked derived with a note; the merge sets the owner
+ * from JSON-LD, or to the business when the link is on two or more pages.
+ */
 export function findingsFromLinks(links: PageLinks, url: string): Finding[] {
   const c = new Collector(url, "link", 0.8);
   for (const href of links?.tel ?? []) {
@@ -527,7 +559,10 @@ export function findingsFromLinks(links: PageLinks, url: string): Finding[] {
     const given = (social.platform ?? "").trim().toLowerCase();
     const platform = (given === "twitter" ? "x" : given) || platformFromUrl(link);
     if (!platform) continue;
-    c.add("social_profiles", [{ platform, url: link, owner: "business" }], link);
+    c.add("social_profiles", [{ platform, url: link, owner: "" }], link, {
+      derived: true,
+      note: `linked from ${pageLabel(url)}; confirm whose profile this is`,
+    });
   }
   for (const href of links?.maps ?? []) {
     const link = href.trim();
