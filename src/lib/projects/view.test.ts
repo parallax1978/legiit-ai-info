@@ -3,6 +3,7 @@ import type { CrawlRunRow } from "@/lib/db/types";
 import type { FactSheetData } from "@/lib/facts/types";
 import type { TemplateField, TemplateSpec } from "@/templates/types";
 import {
+  addressForLine,
   addressFromLine,
   addressFromParts,
   addressLines,
@@ -15,6 +16,7 @@ import {
   isEmptyValue,
   isOneLineAddress,
   isRunFinished,
+  lineForParts,
   listLayout,
   normalizeFields,
   pageLabelFromUrl,
@@ -308,6 +310,34 @@ describe("formatValue", () => {
     expect(addressFromLine("  Remote, registered in Delaware ")).toEqual({ text: "Remote, registered in Delaware" });
     expect(addressFromLine("   ")).toEqual({});
     expect(isEmptyValue(addressFromLine("   "))).toBe(true);
+  });
+
+  it("keeps a part edited before switching to one line", () => {
+    const opened = { streetAddress: "20385 64 Avenue", addressLocality: "Langley", postalCode: "V2Y 1N5" };
+    const saved = "20385 64 Avenue, Langley, BC V2Y 1N5";
+    // Nothing edited: the saved text stays, even where it says more than the parts.
+    expect(lineForParts(saved, opened, opened)).toBe(saved);
+    // A part edited: the line is rebuilt from the parts, so the edit is there.
+    const edited = { ...opened, streetAddress: "#315, 20385 64 Avenue" };
+    expect(lineForParts(saved, opened, edited)).toBe("#315, 20385 64 Avenue, Langley V2Y 1N5");
+    // An empty line is filled from the parts.
+    expect(lineForParts("", opened, opened)).toBe("20385 64 Avenue, Langley V2Y 1N5");
+    // A line typed earlier survives a round trip through untouched parts.
+    expect(lineForParts("Suite 9, Langley", opened, opened)).toBe("Suite 9, Langley");
+    // Parts cleared after a line edit: the line stays rather than becoming empty.
+    expect(lineForParts("Suite 9, Langley", opened, { streetAddress: "" })).toBe("Suite 9, Langley");
+  });
+
+  it("saves the parts from one-line mode while the line still matches them", () => {
+    const parts = { streetAddress: "#315, 20385 64 Avenue", addressLocality: "Langley", postalCode: "" };
+    expect(addressForLine(" #315, 20385 64 Avenue, Langley ", parts)).toEqual({
+      streetAddress: "#315, 20385 64 Avenue",
+      addressLocality: "Langley",
+      text: "#315, 20385 64 Avenue, Langley",
+    });
+    // Once the line is changed, only the line is saved, so no stale part contradicts it.
+    expect(addressForLine("Remote, registered in Delaware", parts)).toEqual({ text: "Remote, registered in Delaware" });
+    expect(addressForLine("  ", { streetAddress: "" })).toEqual({});
   });
 
   it("renders a list in item-shape order", () => {

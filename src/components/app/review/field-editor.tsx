@@ -9,12 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ADDRESS_KEYS,
   ADDRESS_LABELS,
-  addressFromLine,
+  addressForLine,
   addressFromParts,
-  formatAddress,
   isAddressValue,
   isEmptyValue,
   isOneLineAddress,
+  lineForParts,
 } from "@/lib/projects/view";
 import { EditorActions, type EditorProps } from "./editor-actions";
 import { ListEditor } from "./list-editor";
@@ -127,20 +127,26 @@ function AddressEditor({ field, initial, busy, onSave, onCancel, autoFocus }: Ed
     const base: Record<string, string | undefined> = start ? { ...start } : {};
     return Object.fromEntries(keys.map((k) => [k, base[k] ?? ""]));
   });
+  // The parts as they stood when the line was last current, to tell whether a part was edited since.
+  const [partsAtLine, setPartsAtLine] = useState(parts);
 
   const fromParts = useMemo(() => addressFromParts(parts, keys), [parts, keys]);
-  const value: AddressValue = oneLine ? addressFromLine(line) : fromParts;
+  const value: AddressValue = oneLine ? addressForLine(line, parts, keys) : fromParts;
   const empty = isEmptyValue(value);
 
   const switchMode = () => {
     if (oneLine) {
       // Moving to empty parts: start the street with the line so none of it is lost.
       const street = keys.includes("streetAddress") ? "streetAddress" : keys[0];
+      let next = parts;
       if (street && line.trim() && !keys.some((k) => parts[k]?.trim())) {
-        setParts((p) => ({ ...p, [street]: line.trim() }));
+        next = { ...parts, [street]: line.trim() };
+        setParts(next);
       }
-    } else if (!line.trim()) {
-      setLine(formatAddress(fromParts));
+      setPartsAtLine(next);
+    } else {
+      // Moving to one line: keep the line, unless a part was edited since it was last current.
+      setLine(lineForParts(line, partsAtLine, parts, keys));
     }
     setOneLine(!oneLine);
   };

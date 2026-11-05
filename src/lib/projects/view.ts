@@ -440,6 +440,41 @@ export function addressFromLine(line: string): AddressValue {
   return text ? { text } : {};
 }
 
+/**
+ * The one-line text to show when the editor switches from parts to one line.
+ * `partsAtLine` are the parts as they stood when the line was last current
+ * (when the editor opened, or when it last left one-line mode). If a part
+ * changed since then, the line is rebuilt from the parts so the edit is not
+ * lost; otherwise the line stays as it was, or is built from the parts when it
+ * is empty.
+ */
+export function lineForParts(
+  line: string,
+  partsAtLine: Record<string, string | undefined>,
+  parts: Record<string, string | undefined>,
+  keys: readonly string[] = ADDRESS_KEYS,
+): string {
+  const changed = keys.some((k) => (parts[k] ?? "").trim() !== (partsAtLine[k] ?? "").trim());
+  const built = formatAddress(addressFromParts(parts, keys));
+  if (changed) return built || line;
+  return line.trim() ? line : built;
+}
+
+/**
+ * The address to save from one-line mode: the parts as well when the line is
+ * still exactly what the parts make, so switching modes and saving keeps the
+ * street, city, and postal code apart.
+ */
+export function addressForLine(
+  line: string,
+  parts: Record<string, string | undefined>,
+  keys: readonly string[] = ADDRESS_KEYS,
+): AddressValue {
+  const fromParts = addressFromParts(parts, keys);
+  if (fromParts.text && line.trim() === fromParts.text) return fromParts;
+  return addressFromLine(line);
+}
+
 /** The item's values in item-shape order, joined with " / ". */
 export function formatListItem(field: Pick<TemplateField, "itemShape">, item: ListItem): string {
   const keys = field.itemShape?.length ? field.itemShape.map((s) => s.key) : Object.keys(item);
