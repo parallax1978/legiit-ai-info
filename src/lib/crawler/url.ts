@@ -4,7 +4,12 @@
 */
 
 export type RankedUrl = { url: string; rank: number; reason: string };
-export type UrlCandidate = { url: string; text?: string };
+export type UrlCandidate = {
+  url: string;
+  text?: string;
+  /** The home page links here (its own navigation, footer, or body). */
+  fromHome?: boolean;
+};
 
 const HTTP_PROTOCOLS = new Set(["http:", "https:"]);
 
@@ -292,7 +297,8 @@ type KeywordGroup = {
 
 /*
   Scores: higher fetches first. Home 1000, generic page 300, legal 250,
-  careers 200, blog last. Depth takes a little off so short paths win ties.
+  careers 200, product items and blog posts last. Depth takes a little off so
+  short paths win ties.
 */
 const GROUPS: KeywordGroup[] = [
   {
@@ -300,15 +306,14 @@ const GROUPS: KeywordGroup[] = [
     score: 900,
     reason: "about page",
     words: [
-      "about", "aboutus", "story", "company", "mission", "history", "overview", "profile",
-      "philosophy", "values", "approach", "apropos", "impressum", "imprint", "sobre", "ueber",
-      "uber", "chi", "over", "om",
+      "about", "aboutus", "company", "mission", "history", "overview", "philosophy",
+      "values", "approach", "apropos", "impressum", "imprint", "sobre", "ueber",
     ],
     phrases: [
       "about us", "our story", "who we are", "our company", "our practice", "the practice",
       "our firm", "the firm", "our clinic", "why us", "why choose us", "our approach",
-      "about me", "a propos", "ueber uns", "uber uns", "sobre nosotros", "quienes somos",
-      "chi siamo", "over ons", "om oss", "qui sommes nous",
+      "about me", "company profile", "a propos", "ueber uns", "uber uns", "sobre nosotros",
+      "quienes somos", "chi siamo", "over ons", "om oss", "qui sommes nous",
     ],
   },
   {
@@ -319,8 +324,7 @@ const GROUPS: KeywordGroup[] = [
       "team", "staff", "people", "meet", "leadership", "founders", "founder", "management",
       "doctors", "dentists", "therapists", "counsellors", "counselors", "attorneys", "lawyers",
       "physicians", "providers", "practitioners", "clinicians", "advisors", "advisers", "agents",
-      "instructors", "trainers", "coaches", "bio", "bios", "biography", "profiles", "equipe",
-      "equipo",
+      "instructors", "trainers", "coaches", "bio", "bios", "biography", "equipe", "equipo",
     ],
     phrases: ["our team", "our people", "meet the team", "our doctors", "our therapists"],
   },
@@ -342,8 +346,11 @@ const GROUPS: KeywordGroup[] = [
     id: "faq",
     score: 750,
     reason: "faq page",
-    words: ["faq", "faqs", "questions"],
-    phrases: ["frequently asked questions", "common questions"],
+    words: ["faq", "faqs", "questions", "help", "support"],
+    phrases: [
+      "frequently asked questions", "common questions", "help center", "help centre",
+      "knowledge base", "support center",
+    ],
   },
   {
     id: "pricing",
@@ -362,14 +369,10 @@ const GROUPS: KeywordGroup[] = [
     words: [
       "services", "service", "solutions", "treatments", "treatment", "therapies", "therapy",
       "specialties", "specialities", "specialty", "offerings", "programs", "program", "courses",
-      "course", "capabilities", "expertise", "features", "feature", "platform", "menu", "menus",
-      "leistungen", "dienstleistungen", "servicios", "servizi", "diensten", "prestations",
-      "support", "help",
+      "course", "capabilities", "expertise", "features", "menu", "menus", "leistungen",
+      "dienstleistungen", "servicios", "servizi", "diensten", "prestations",
     ],
-    phrases: [
-      "what we do", "our services", "practice areas", "practice area", "what we offer",
-      "how we help", "help center", "knowledge base",
-    ],
+    phrases: ["what we do", "our services", "practice areas", "practice area", "what we offer", "how we help"],
   },
   {
     id: "products",
@@ -401,10 +404,7 @@ const GROUPS: KeywordGroup[] = [
     id: "clients",
     score: 520,
     reason: "clients or case studies page",
-    words: [
-      "clients", "customers", "portfolio", "work", "projects", "project", "results",
-      "casestudies", "partners",
-    ],
+    words: ["clients", "customers", "portfolio", "results", "casestudies", "partners"],
     phrases: [
       "case studies", "case study", "our clients", "our customers", "our work",
       "success stories", "before and after",
@@ -415,7 +415,7 @@ const GROUPS: KeywordGroup[] = [
     score: 500,
     reason: "awards or press page",
     words: [
-      "awards", "award", "press", "media", "accreditations", "accreditation", "certifications",
+      "awards", "award", "press", "accreditations", "accreditation", "certifications",
       "certification", "credentials", "recognition", "achievements", "affiliations",
       "associations",
     ],
@@ -430,23 +430,25 @@ const GROUPS: KeywordGroup[] = [
       "gdpr", "sitemap",
     ],
     phrases: [
-      "privacy policy", "terms of service", "terms and conditions", "terms conditions",
-      "cookie policy", "refund policy", "shipping policy", "return policy", "legal notice",
-      "site map", "html sitemap",
+      "privacy policy", "terms of service", "terms of use", "terms and conditions",
+      "terms conditions", "cookie policy", "refund policy", "shipping policy", "return policy",
+      "legal notice", "site map", "html sitemap",
+    ],
+  },
+  {
+    id: "careers",
+    score: 200,
+    reason: "careers page",
+    words: [
+      "careers", "career", "jobs", "job", "hiring", "vacancies", "vacancy", "employment",
+      "recruitment", "recruiting", "internships", "internship",
+    ],
+    phrases: [
+      "join us", "join our team", "join the team", "we are hiring", "work with us",
+      "work for us", "now hiring",
     ],
   },
 ];
-
-const CAREERS: KeywordGroup = {
-  id: "careers",
-  score: 200,
-  reason: "careers page",
-  words: [
-    "careers", "career", "jobs", "job", "hiring", "vacancies", "vacancy", "employment",
-    "recruitment", "recruiting", "opportunities", "internships", "internship",
-  ],
-  phrases: ["join us", "join our team", "join the team", "we are hiring", "work with us", "work for us", "now hiring"],
-};
 
 const BLOG_WORDS = new Set([
   "blog", "blogs", "news", "article", "articles", "post", "posts", "insights", "insight",
@@ -455,33 +457,104 @@ const BLOG_WORDS = new Set([
   "events", "event", "newsletter", "archive", "archives", "category", "tag", "author", "page",
 ]);
 
+/** First segments under which every page is one product (Shopify, WooCommerce, Wix, Squarespace). */
+const PRODUCT_PREFIXES = new Set([
+  "products", "product", "collections", "collection", "shop", "store", "item", "items",
+  "product-page", "catalog", "p",
+]);
+
+/** First segments that carry no meaning of their own: Shopify puts every content page under /pages/. */
+const TRANSPARENT_PREFIXES = new Set(["pages"]);
+
+/** Locale path prefixes ("/en", "/fr-ca"). Two letters alone are not enough: "/ep" is a slug. */
+const LANGUAGE_CODES = new Set([
+  "en", "fr", "de", "es", "it", "pt", "nl", "sv", "da", "no", "nb", "nn", "fi", "is", "pl", "cs",
+  "sk", "hu", "ro", "bg", "el", "tr", "ru", "uk", "ja", "zh", "ko", "ar", "he", "hi", "id", "ms",
+  "th", "vi", "ca", "eu", "gl", "hr", "sl", "sr", "lt", "lv", "et", "ga", "cy",
+]);
+const LOCALE_RE = /^([a-z]{2})(?:[-_]([a-z]{2}))?$/;
+
+/** Tokens that mark a stale or duplicate page: "adult-therapy-old", "about-copy", "about-2". */
+const STALE_TOKENS = new Set(["old", "copy", "draft", "test", "backup", "temp", "staging", "dup", "duplicate"]);
+
 const HOME_SCORE = 1000;
 const GENERIC_SCORE = 300;
+const HOME_ALIAS_SCORE = 260;
+const PRODUCT_ITEM_SCORE = 180;
 const BLOG_SCORE = 100;
 const LINK_TEXT_PENALTY = 50;
+const STALE_PENALTY = 150;
+/** Extra for a URL the home page links to: the site's own navigation says it matters. */
+export const HOME_LINK_BONUS = 40;
 
 function tokenize(s: string): string[] {
   return s
     .toLowerCase()
     .replace(/%20/g, " ")
-    .split(/[^a-z0-9\u00c0-\u024f]+/)
+    .split(/[^a-z0-9À-ɏ]+/)
     .filter(Boolean);
 }
 
-function matchGroup(group: KeywordGroup, tokens: string[], joined: string): boolean {
-  if (group.phrases?.some((p) => ` ${joined} `.includes(` ${p} `))) return true;
-  return tokens.some((t) => group.words.includes(t));
+function isLocale(segment: string): boolean {
+  const m = LOCALE_RE.exec(segment);
+  return Boolean(m && LANGUAGE_CODES.has(m[1]));
 }
 
-function bestGroup(tokens: string[]): KeywordGroup | null {
-  const joined = tokens.join(" ");
-  if (matchGroup(CAREERS, tokens, joined)) return CAREERS;
-  let best: KeywordGroup | null = null;
-  for (const g of GROUPS) {
-    if (!matchGroup(g, tokens, joined)) continue;
-    if (!best || g.score > best.score) best = g;
+/** How a group matched a token run, strongest first. */
+type Strength = 3 | 2 | 1;
+
+type Match = { group: KeywordGroup; strength: Strength; length: number };
+
+/** Score taken off for a weaker match. */
+const STRENGTH_PENALTY: Record<Strength, number> = { 3: 0, 2: 50, 1: 250 };
+
+function phraseAt(tokens: string[], phrase: string[], at: number): boolean {
+  return phrase.every((w, i) => tokens[at + i] === w);
+}
+
+/**
+ * The group a run of tokens (one path segment, or a link's text) names, and
+ * how strongly. A keyword at the head of the run is a strong match ("about-us",
+ * "terms-of-service", "rates-policies"). In a short run (three tokens or fewer)
+ * a keyword anywhere is nearly as strong ("meet-the-team"). In a run of four or
+ * five a keyword past the head is weak ("play-therapy-in-langley-bc"). In longer
+ * runs, which are article titles, only the head counts: "pumpkin-to-talk-about-tee"
+ * is not an about page. Longer phrases beat shorter ones, so "join our team" is
+ * careers, not team, and "terms of service" is legal, not services.
+ */
+function matchTokens(tokens: string[]): Match | null {
+  if (!tokens.length) return null;
+  const n = tokens.length;
+  let best: Match | null = null;
+  const consider = (m: Match) => {
+    if (
+      !best ||
+      m.strength > best.strength ||
+      (m.strength === best.strength && m.length > best.length) ||
+      (m.strength === best.strength && m.length === best.length && m.group.score > best.group.score)
+    ) {
+      best = m;
+    }
+  };
+
+  for (const group of GROUPS) {
+    for (const p of group.phrases ?? []) {
+      const words = p.split(" ");
+      if (phraseAt(tokens, words, 0)) consider({ group, strength: 3, length: words.length });
+      else if (n <= 3 && tokens.some((_, i) => phraseAt(tokens, words, i))) consider({ group, strength: 3, length: words.length });
+      else if (n <= 5 && tokens.some((_, i) => i > 0 && phraseAt(tokens, words, i))) consider({ group, strength: 1, length: words.length });
+    }
+    for (const w of group.words) {
+      if (tokens[0] === w) consider({ group, strength: 3, length: 1 });
+      else if (n <= 3 && tokens.includes(w)) consider({ group, strength: 2, length: 1 });
+      else if (n <= 5 && tokens.includes(w)) consider({ group, strength: 1, length: 1 });
+    }
   }
   return best;
+}
+
+function scoreOf(m: Match): number {
+  return m.group.score - STRENGTH_PENALTY[m.strength];
 }
 
 function isHomePath(path: string): boolean {
@@ -489,12 +562,16 @@ function isHomePath(path: string): boolean {
 }
 
 /** Common first-level landing paths that are the home page under another name. */
-const HOME_ALIAS_RE = /^\/(home|index(\.php|\.html?)?|main|welcome|[a-z]{2}(-[a-z]{2})?)\/?$/i;
+const HOME_ALIAS_RE = /^\/(home|index(\.php|\.html?)?|main|welcome)\/?$/i;
+
+function isHomeAlias(path: string, segments: string[]): boolean {
+  return HOME_ALIAS_RE.test(path) || (segments.length === 1 && isLocale(segments[0]));
+}
 
 /**
  * Scores a URL for crawl order. The path decides first; the link text can
- * raise a generic path. Returns the reason so the review screen can show why
- * a page was fetched.
+ * raise it. Returns the reason so the review screen can show why a page was
+ * fetched.
  */
 export function rankUrl(url: string, linkText?: string): { score: number; reason: string } {
   let u: URL;
@@ -507,52 +584,79 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
   const path = u.pathname.replace(/\/+$/, "") || "/";
   if (isHomePath(path)) return { score: HOME_SCORE, reason: "home page" };
 
-  const segments = path.split("/").filter(Boolean).map((s) => {
+  let segments = path.split("/").filter(Boolean).map((s) => {
     try {
       return decodeURIComponent(s);
     } catch {
       return s;
     }
   });
-  const depthPenalty = Math.min(60, Math.max(0, segments.length - 1) * 10);
+  // The same home page under another path or language: rarely a new fact, so below generic pages.
+  if (isHomeAlias(path, segments)) return { score: HOME_ALIAS_SCORE, reason: "home page (alias)" };
 
-  if (HOME_ALIAS_RE.test(path)) return { score: HOME_SCORE - 50, reason: "home page (alias)" };
-
-  const pathTokens = tokenize(segments.join(" "));
-  const firstTokens = tokenize(segments[0] ?? "");
-  const dated = /\/(19|20)\d{2}\/\d{1,2}(\/|$)/.test(path);
-  const blogRoot = firstTokens.length > 0 && firstTokens.every((t) => BLOG_WORDS.has(t));
-
-  if (dated) return { score: BLOG_SCORE - 10 - depthPenalty, reason: "dated post" };
-  if (blogRoot && segments.length > 1) {
-    return { score: BLOG_SCORE - 10 - depthPenalty, reason: "blog post" };
+  // "/en/about" is the about page; "/pages/about" on Shopify too.
+  while (segments.length > 1 && (isLocale(segments[0]) || TRANSPARENT_PREFIXES.has(segments[0].toLowerCase()))) {
+    segments = segments.slice(1);
   }
-  if (blogRoot) return { score: BLOG_SCORE - depthPenalty, reason: "blog index" };
+  const depthPenalty = Math.min(60, Math.max(0, segments.length - 1) * 10);
+  const first = segments[0]?.toLowerCase() ?? "";
+  const firstTokens = tokenize(first);
+  const lastTokens = tokenize(segments[segments.length - 1] ?? "");
+
+  if (/\/(19|20)\d{2}\/\d{1,2}(\/|$)/.test(path)) return { score: BLOG_SCORE - 10 - depthPenalty, reason: "dated post" };
+
+  const blogRoot = firstTokens.length > 0 && firstTokens.every((t) => BLOG_WORDS.has(t));
+  if (blogRoot) {
+    return segments.length > 1
+      ? { score: BLOG_SCORE - 10 - depthPenalty, reason: "blog post" }
+      : { score: BLOG_SCORE - depthPenalty, reason: "blog index" };
+  }
+  if (PRODUCT_PREFIXES.has(first) && segments.length > 1) {
+    return { score: PRODUCT_ITEM_SCORE - depthPenalty, reason: "product page" };
+  }
 
   let score = GENERIC_SCORE - depthPenalty;
   let reason = "page";
 
-  const pathGroup = bestGroup(pathTokens);
-  if (pathGroup) {
-    score = pathGroup.score - depthPenalty;
-    reason = pathGroup.reason;
-  } else if (pathTokens.some((t) => BLOG_WORDS.has(t))) {
-    score = BLOG_SCORE - depthPenalty;
-    reason = "blog page";
+  // The last segment names the page; a parent segment only names its section, weakly.
+  const own = matchTokens(lastTokens);
+  if (own) {
+    score = scoreOf(own) - depthPenalty;
+    reason = own.group.reason;
+  } else {
+    for (const parent of segments.slice(0, -1).reverse()) {
+      const section = matchTokens(tokenize(parent));
+      if (!section) continue;
+      const sectionScore = section.group.score - 300 - depthPenalty;
+      if (sectionScore > score) {
+        score = sectionScore;
+        reason = `${section.group.reason.replace(/ page$/, "")} section`;
+      }
+      break;
+    }
+    if (reason === "page" && lastTokens.some((t) => BLOG_WORDS.has(t))) {
+      score = BLOG_SCORE - depthPenalty;
+      reason = "blog page";
+    }
+  }
+
+  const stale = segments.some((seg) => tokenize(seg).some((t) => STALE_TOKENS.has(t)));
+  if (stale || /-\d$/.test(segments[segments.length - 1] ?? "")) {
+    score -= STALE_PENALTY;
   }
 
   if (linkText) {
     const textTokens = tokenize(linkText);
-    const textGroup = bestGroup(textTokens);
-    const homeText = textTokens.length === 1 && textTokens[0] === "home";
-    if (homeText && !pathGroup) {
+    if (textTokens.length === 1 && textTokens[0] === "home" && !own) {
       return { score: HOME_SCORE - 50, reason: "home (link text)" };
     }
-    if (textGroup) {
-      const textScore = textGroup.score - LINK_TEXT_PENALTY - depthPenalty;
+    // Link text of a sentence ("read more about our new mug") says nothing about the page.
+    const text = textTokens.length <= 6 ? matchTokens(textTokens) : null;
+    if (text && text.strength >= 2) {
+      const textScore = scoreOf(text) - LINK_TEXT_PENALTY - depthPenalty;
       if (textScore > score) {
         score = textScore;
-        reason = `${textGroup.reason.replace(/ page$/, "")} (link text)`;
+        reason = `${text.group.reason.replace(/ page$/, "")} (link text)`;
       }
     }
   }
@@ -562,7 +666,8 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
 
 /**
  * Dedupes, drops non-HTML and off-site URLs, ranks, caps. The home page is
- * always rank 0 when present. Ranks are 0..n in fetch order.
+ * always rank 0 when present. Ranks are 0..n in fetch order. A candidate the
+ * home page links to gets HOME_LINK_BONUS.
  */
 export function rankUrls(
   candidates: UrlCandidate[],
@@ -578,13 +683,16 @@ export function rankUrls(
     if (!looksLikeHtmlPath(normalized)) continue;
     const key = urlKey(normalized);
     if (!key) continue;
+    // "/?r=0" and "/?lang=en" are the home page again.
+    if (key !== homeKey && new URL(normalized).pathname === "/") continue;
 
-    const ranked = key === homeKey ? { score: HOME_SCORE, reason: "home page" } : rankUrl(normalized, c.text);
+    const ranked = key === homeKey ? { score: HOME_SCORE + 100, reason: "home page" } : rankUrl(normalized, c.text);
+    const score = ranked.score + (c.fromHome && key !== homeKey ? HOME_LINK_BONUS : 0);
     const existing = byKey.get(key);
     if (!existing) {
-      byKey.set(key, { url: normalized, ...ranked, pathLength: new URL(normalized).pathname.length });
-    } else if (ranked.score > existing.score) {
-      existing.score = ranked.score;
+      byKey.set(key, { url: normalized, score, reason: ranked.reason, pathLength: new URL(normalized).pathname.length });
+    } else if (score > existing.score) {
+      existing.score = score;
       existing.reason = ranked.reason;
     }
   }

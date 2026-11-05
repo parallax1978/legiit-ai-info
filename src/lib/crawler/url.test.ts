@@ -190,3 +190,71 @@ describe("isPrivateHost with IPv6", () => {
     expect(() => normalizeSiteUrl("https://[::ffff:169.254.169.254]/")).toThrow();
   });
 });
+
+describe("rankUrl on real-site slugs", () => {
+  it("does not treat any two-letter path as a language home page", () => {
+    for (const slug of ["EP", "ev", "kd", "Jo", "NT"]) expect(rankUrl(`https://legiit.com/${slug}`).reason, slug).toBe("page");
+    expect(rankUrl("https://e.com/en").reason).toBe("home page (alias)");
+    expect(rankUrl("https://e.com/fr-ca").reason).toBe("home page (alias)");
+    expect(rankUrl("https://e.com/en/about-us").reason).toBe("about page");
+  });
+
+  it("matches keywords by position, not anywhere in a long slug", () => {
+    expect(rankUrl("https://shop.com/products/pumpkin-to-talk-about-tee").reason).toBe("product page");
+    expect(rankUrl("https://shop.com/pages/fueled-by-death-cast-ep-176-vincent-price-body-count").reason).toBe("page");
+    expect(rankUrl("https://shop.com/pages/about").reason).toBe("about page");
+    expect(rankUrl("https://shop.com/pages/help-about-our-product").reason).toBe("faq page");
+    expect(rankUrl("https://e.com/terms-of-service").reason).toBe("legal page");
+    expect(rankUrl("https://e.com/join-our-team").reason).toBe("careers page");
+    expect(rankUrl("https://e.com/meet-the-team").reason).toBe("team page");
+    expect(rankUrl("https://e.com/rates-policies").reason).toBe("pricing page");
+    expect(rankUrl("https://e.com/play-therapy-in-langley-bc").reason).toBe("services page");
+  });
+
+  it("ranks product items and help articles below the pages that describe the business", () => {
+    const contact = rankUrl("https://shop.com/pages/contact").score;
+    expect(rankUrl("https://shop.com/products/medium-roast").score).toBeLessThan(contact);
+    expect(rankUrl("https://shop.com/collections/coffee").score).toBeLessThan(rankUrl("https://e.com/anything").score);
+    expect(rankUrl("https://shop.com/products").reason).toBe("products page");
+    const article = rankUrl("https://e.com/help/sites-and-profiles/how-do-i-fix-the-profile");
+    expect(article.reason).toBe("faq section");
+    expect(article.score).toBeLessThan(rankUrl("https://e.com/our-team").score);
+  });
+
+  it("pushes stale copies below the live page", () => {
+    expect(rankUrl("https://e.com/adult-individual-therapy-old").score).toBeLessThan(
+      rankUrl("https://e.com/adult-individual-therapy").score,
+    );
+    expect(rankUrl("https://e.com/about-2").score).toBeLessThan(rankUrl("https://e.com/about").score);
+    expect(rankUrl("https://e.com/staging/contact").score).toBeLessThan(rankUrl("https://e.com/faq").score);
+  });
+
+  it("only lets short link text name a page", () => {
+    expect(rankUrl("https://e.com/x7", "About us").reason).toBe("about (link text)");
+    expect(rankUrl("https://e.com/x7", "Read more about the new mug we launched in May").reason).toBe("page");
+  });
+});
+
+describe("rankUrls with home page links", () => {
+  it("lifts the pages the home page links to above sitemap-only pages", () => {
+    const ranked = rankUrls(
+      [
+        { url: "https://legiit.com/" },
+        { url: "https://legiit.com/EP" },
+        { url: "https://legiit.com/ev" },
+        { url: "https://legiit.com/how-it-works", text: "How it works", fromHome: true },
+        { url: "https://legiit.com/about-legiit", text: "About", fromHome: true },
+        { url: "https://legiit.com/faq", text: "FAQ", fromHome: true },
+      ],
+      { home: "https://legiit.com/", max: 10 },
+    );
+    expect(ranked.map((r) => r.url).slice(0, 3)).toEqual([
+      "https://legiit.com/",
+      "https://legiit.com/about-legiit",
+      "https://legiit.com/faq",
+    ]);
+    expect(ranked.findIndex((r) => r.url.endsWith("/how-it-works"))).toBeLessThan(
+      ranked.findIndex((r) => r.url.endsWith("/EP")),
+    );
+  });
+});

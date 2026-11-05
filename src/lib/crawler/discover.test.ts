@@ -107,3 +107,74 @@ describe("discoverSite with a blocking robots.txt", () => {
     expect(result.blockedByRobots).toEqual(["https://example.com/"]);
   });
 });
+
+describe("discoverSite with home page links", () => {
+  it("adds the pages the home page links to, even when the sitemap only lists profiles", async () => {
+    const HOME = `<html><body><header><nav>
+      <a href="/about-legiit">About</a><a href="/faq">FAQ</a><a href="/contact-us">Contact us</a>
+      <a href="https://twitter.com/legiit">Twitter</a></nav></header>
+      <main><p>Welcome</p></main></body></html>`;
+    const PROFILES = `<urlset>${["EP", "ev", "kd", "Jo", "NT"].map((s) => `<url><loc>https://legiit.com/${s}</loc></url>`).join("")}</urlset>`;
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === "https://legiit.com/") return new Response(HOME, { headers: { "content-type": "text/html" } });
+      if (url === "https://legiit.com/sitemap.xml") return new Response(PROFILES, { headers: { "content-type": "application/xml" } });
+      return new Response("nope", { status: 404 });
+    };
+    const result = await discoverSite("https://legiit.com/", { ...opts, maxPages: 5, fetchImpl });
+    expect(result.usedSitemap).toBe(true);
+    expect(result.queue.map((q) => q.url)).toEqual([
+      "https://legiit.com/",
+      "https://legiit.com/about-legiit",
+      "https://legiit.com/contact-us",
+      "https://legiit.com/faq",
+      expect.stringMatching(/^https:\/\/legiit\.com\/(EP|ev|kd|Jo|NT)$/),
+    ]);
+  });
+
+  it("does not fetch the home page when robots.txt disallows it", async () => {
+    const requested: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      requested.push(url);
+      if (url.endsWith("/robots.txt")) return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
+      return new Response("nope", { status: 404 });
+    };
+    await discoverSite("https://example.com/", { ...opts, fetchImpl });
+    expect(requested).not.toContain("https://example.com/");
+  });
+});
+
+describe("discoverSite probes for key pages it cannot see", () => {
+  it("finds /about on a site whose home page renders in the browser", async () => {
+    const requested: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      requested.push(url);
+      if (url === "https://app.example.com/") return new Response("<html><body><div id=root></div></body></html>", { headers: { "content-type": "text/html" } });
+      if (url === "https://app.example.com/about") return new Response("<html><body><h1>About</h1></body></html>", { headers: { "content-type": "text/html" } });
+      // Everything else bounces to the home page, as a client-side router would.
+      if (!url.endsWith(".txt") && !url.endsWith(".xml")) return new Response(null, { status: 302, headers: { location: "https://app.example.com/" } });
+      return new Response("nope", { status: 404 });
+    };
+    const result = await discoverSite("https://app.example.com/", { ...opts, maxPages: 10, fetchImpl });
+    expect(result.queue.map((q) => q.url)).toEqual(["https://app.example.com/", "https://app.example.com/about"]);
+    expect(requested).toContain("https://app.example.com/team");
+  });
+
+  it("does not probe when the key pages are already known", async () => {
+    const requested: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      requested.push(url);
+      if (url === "https://example.com/robots.txt") return new Response(ROBOTS, { headers: { "content-type": "text/plain" } });
+      if (url === "https://example.com/sitemap.xml") return new Response(
+        `<urlset>${["/about", "/our-team", "/contact", "/faq", "/pricing"].map((p) => `<url><loc>https://example.com${p}</loc></url>`).join("")}</urlset>`,
+        { headers: { "content-type": "application/xml" } },
+      );
+      return new Response("nope", { status: 404 });
+    };
+    await discoverSite("https://example.com/", { ...opts, maxPages: 10, fetchImpl });
+    expect(requested.filter((u) => /\/(about-us|team|contact-us|faqs)$/.test(u))).toEqual([]);
+  });
+});
