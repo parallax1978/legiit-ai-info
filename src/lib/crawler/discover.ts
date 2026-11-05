@@ -209,12 +209,16 @@ export function addDiscoveredLinks(
   if (opts.max <= 0) return [];
 
   const known = new Set<string>();
+  // Every URL already queued or fetched, so a copy among the new links can be told from its live twin.
+  const knownUrls: string[] = [];
   for (const url of seen) {
+    knownUrls.push(url);
     const key = urlKey(url);
     if (key) known.add(key);
   }
   let highestRank = -1;
   for (const entry of queue) {
+    knownUrls.push(entry.url);
     const key = urlKey(entry.url);
     if (key) known.add(key);
     if (entry.rank > highestRank) highestRank = entry.rank;
@@ -229,7 +233,11 @@ export function addDiscoveredLinks(
     candidates.push(link.text ? { url: n, text: link.text } : { url: n });
   }
 
-  const ranked = rankUrls(candidates, { home: opts.home, max: Number.MAX_SAFE_INTEGER })
+  const ranked = rankUrls(candidates, {
+    home: opts.home,
+    max: Number.MAX_SAFE_INTEGER,
+    known: knownUrls,
+  })
     .filter((entry) => (opts.allowed ? opts.allowed(entry.url) : true))
     .slice(0, opts.max);
 

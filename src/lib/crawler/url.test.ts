@@ -221,12 +221,6 @@ describe("rankUrl on real-site slugs", () => {
     expect(article.score).toBeLessThan(rankUrl("https://e.com/our-team").score);
   });
 
-  it("pushes copies in staging or old folders below the live pages, however they are linked", () => {
-    expect(rankUrl("https://e.com/staging/contact").score).toBeLessThan(rankUrl("https://e.com/faq").score);
-    expect(rankUrl("https://e.com/staging/contact", "Contact").score).toBeLessThan(rankUrl("https://e.com/faq").score);
-    expect(rankUrl("https://e.com/old/about").score).toBeLessThan(rankUrl("https://e.com/services").score);
-  });
-
   it("does not treat real pages that use those words as stale", () => {
     expect(rankUrl("https://it.example/services/cloud-backup").reason).not.toBe("page");
     expect(rankUrl("https://it.example/services/cloud-backup").score).toBeGreaterThan(rankUrl("https://it.example/blog").score);
@@ -268,6 +262,63 @@ describe("rankUrls with home page links", () => {
 });
 
 describe("rankUrls with stale siblings and root queries", () => {
+  it("pushes a copy in a staging or old folder below every live page, however it is linked", () => {
+    const ranked = rankUrls(
+      [
+        { url: "https://e.com/" },
+        { url: "https://e.com/contact", text: "Contact" },
+        { url: "https://e.com/about" },
+        { url: "https://e.com/staging/contact", text: "Contact", fromHome: true },
+        { url: "https://e.com/old/about", text: "About us" },
+        { url: "https://e.com/counselling-for-teens" },
+        { url: "https://e.com/shop/blue-mug" },
+        { url: "https://e.com/blog/our-news" },
+      ],
+      { home: "https://e.com/", max: 20 },
+    );
+    const at = (p: string) => ranked.findIndex((r) => r.url === `https://e.com${p}`);
+    for (const copy of ["/staging/contact", "/old/about"]) {
+      expect(at(copy)).toBeGreaterThan(at("/counselling-for-teens"));
+      expect(at(copy)).toBeGreaterThan(at("/shop/blue-mug"));
+      // Above blog posts, so a false match cannot bury a real page.
+      expect(at(copy)).toBeLessThan(at("/blog/our-news"));
+    }
+    expect(ranked[at("/staging/contact")].reason).toBe("contact page, old copy");
+  });
+
+  it("treats a folder named like a copy as real when no live twin exists", () => {
+    const ranked = rankUrls(
+      [
+        { url: "https://stager.example/" },
+        { url: "https://stager.example/staging" },
+        { url: "https://stager.example/staging/vacant-homes" },
+        { url: "https://stager.example/tests/blood-panel" },
+        { url: "https://stager.example/anything" },
+      ],
+      { home: "https://stager.example/", max: 20 },
+    );
+    expect(ranked.filter((r) => r.reason.endsWith("old copy"))).toEqual([]);
+  });
+
+  it("pushes an old copy of the home page down", () => {
+    const ranked = rankUrls(
+      [
+        { url: "https://e.com/" },
+        { url: "https://e.com/homeold", text: "Home" },
+        { url: "https://e.com/home-2" },
+        { url: "https://e.com/old-home" },
+        { url: "https://e.com/perinatal-mental-health" },
+        { url: "https://e.com/homestead-tours" },
+      ],
+      { home: "https://e.com/", max: 20 },
+    );
+    const at = (p: string) => ranked.findIndex((r) => r.url === `https://e.com${p}`);
+    for (const copy of ["/homeold", "/home-2", "/old-home"]) {
+      expect(at(copy)).toBeGreaterThan(at("/perinatal-mental-health"));
+    }
+    expect(ranked[at("/homestead-tours")].reason).toBe("page");
+  });
+
   it("pushes a suffixed copy below its live sibling only when the sibling exists", () => {
     const ranked = rankUrls(
       [

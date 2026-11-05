@@ -95,6 +95,25 @@ describe("addDiscoveredLinks", () => {
   it("returns nothing when there is no room", () => {
     expect(addDiscoveredLinks(queue, [], [{ url: "/about/" }], { home, max: 0 })).toEqual([]);
   });
+
+  it("knows a new link is an old copy when its live twin was queued or fetched earlier", () => {
+    const queued = [...queue, { url: "https://example.com/contact", rank: 1, reason: "contact page" }];
+    const added = addDiscoveredLinks(
+      queued,
+      new Set(["https://example.com/about-us"]),
+      [
+        { url: "/staging/contact", text: "Contact" },
+        { url: "/about-us-old", text: "About" },
+        { url: "/counselling-for-teens" },
+      ],
+      { home, max: 5 },
+    );
+    expect(added.map((a) => [a.url, a.reason])).toEqual([
+      ["https://example.com/counselling-for-teens", "page"],
+      ["https://example.com/about-us-old", "about page, old copy"],
+      ["https://example.com/staging/contact", "contact page, old copy"],
+    ]);
+  });
 });
 
 describe("discoverSite with a blocking robots.txt", () => {

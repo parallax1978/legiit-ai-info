@@ -474,15 +474,24 @@ const LANGUAGE_CODES = new Set([
 ]);
 const LOCALE_RE = /^([a-z]{2})(?:[-_]([a-z]{2}))?$/;
 
-/**
- * Folder names that hold copies of the live site ("/staging/contact",
- * "/old/about"). Only a parent folder counts: "cloud-backup", "test-prep",
- * a copywriter's "/copy", and a home stager's "/staging" are real pages.
- */
+/*
+  Stale copies. A WordPress site keeps old pages around ("about-us-old",
+  "services-2", "/staging/contact", "homeold"), and an old copy can hold an old
+  phone number or a departed therapist, which would show up as a false
+  conflict. A page counts as a copy only when the live page it copies exists:
+  "/staging/contact" next to "/contact", "about-2" next to "about". A home
+  stager's "/staging/vacant-homes" and a lab's "/tests/blood-panel" have no
+  live twin, so they are real pages.
+*/
+
+/** Folder names that hold a copy of the live site. */
 const STALE_DIRS = new Set(["staging", "stage", "old", "draft", "drafts", "test", "tests", "backup", "temp", "tmp", "dev", "copy"]);
 
-/** Suffixes that mark a copy of a sibling page: "about-us-old", "services-2". Only counted when the sibling exists. */
+/** Suffixes that mark a copy of a sibling page: "about-us-old", "services-2". */
 const STALE_SUFFIX_RE = /^(.+?)-(?:old|copy|draft|backup|temp|test|dup|duplicate|\d)$/;
+
+/** A copy of the home page, which always exists: "homeold", "home-2", "old-home", "index-copy". */
+const HOME_COPY_RE = /^(?:(?:home|homepage|index|main|front)[-_]?(?:old|copy|backup|bak|draft|temp|test|\d)|(?:old|copy)[-_]?(?:home|homepage|index))$/i;
 
 /** Query keys that leave the home page the same page: "/?lang=en", "/?r=0". */
 const HOME_QUERY_KEYS = new Set(["lang", "language", "locale", "hl", "r", "ref", "src", "source", "from", "amp", "v", "view", "s"]);
@@ -493,7 +502,12 @@ const HOME_ALIAS_SCORE = 260;
 const PRODUCT_ITEM_SCORE = 180;
 const BLOG_SCORE = 100;
 const LINK_TEXT_PENALTY = 50;
-const STALE_PENALTY = 300;
+/**
+ * Where a stale copy ranks, however it is linked: below every live page (the
+ * deepest product page scores PRODUCT_ITEM_SCORE - 60) and above blog posts,
+ * so a false match cannot bury a real page below the posts.
+ */
+const STALE_SCORE = BLOG_SCORE + 10;
 /** Extra for a URL the home page links to: the site's own navigation says it matters. */
 export const HOME_LINK_BONUS = 40;
 
@@ -657,9 +671,6 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
     }
   }
 
-  // A stale or staging copy ranks low however it is linked; applied after the link text below.
-  const stale = segments.slice(0, -1).some((seg) => STALE_DIRS.has(seg.toLowerCase()));
-
   if (linkText) {
     const textTokens = tokenize(linkText);
     if (textTokens.length === 1 && textTokens[0] === "home" && !own) {
@@ -676,12 +687,41 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
     }
   }
 
-  return { score: stale ? staleScore(score) : score, reason };
+  return { score, reason };
 }
 
-/** A copy of a live page ranks low, but never below blog posts: a false match must not bury a real page. */
-function staleScore(score: number): number {
-  return Math.max(BLOG_SCORE + 10, score - STALE_PENALTY);
+
+/** A path's segments, decoded and lowercased, without the trailing slash. */
+function pathSegments(path: string): string[] {
+  return path
+    .replace(/\/+$/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((seg) => {
+      try {
+        return decodeURIComponent(seg).toLowerCase();
+      } catch {
+        return seg.toLowerCase();
+      }
+    });
+}
+
+/**
+ * True when the path is a copy of a live page in `live` (paths as
+ * pathSegments(...).join("/")): a folder copy, a suffixed copy, or a copy of
+ * the home page.
+ */
+export function isStaleCopy(path: string, live: ReadonlySet<string>): boolean {
+  const segs = pathSegments(path);
+  if (!segs.length) return false;
+  const last = segs[segs.length - 1];
+  if (segs.length === 1 && HOME_COPY_RE.test(last)) return true;
+  // "/staging/contact" copies "/contact"; a folder on its own ("/staging") is a page.
+  for (let i = 0; i < segs.length - 1; i++) {
+    if (STALE_DIRS.has(segs[i]) && live.has([...segs.slice(0, i), ...segs.slice(i + 1)].join("/"))) return true;
+  }
+  const m = STALE_SUFFIX_RE.exec(last);
+  return Boolean(m && live.has([...segs.slice(0, -1), m[1]].join("/")));
 }
 
 /**
@@ -691,7 +731,12 @@ function staleScore(score: number): number {
  */
 export function rankUrls(
   candidates: UrlCandidate[],
-  opts: { home: string; max: number },
+  opts: {
+    home: string;
+    max: number;
+    /** URLs already queued or fetched, so a copy among the candidates can be told from its live twin. */
+    known?: Iterable<string>;
+  },
 ): RankedUrl[] {
   const homeKey = urlKey(opts.home);
   const byKey = new Map<string, { url: string; score: number; reason: string; pathLength: number }>();
@@ -718,13 +763,21 @@ export function rankUrls(
     }
   }
 
-  // "about-us-old" or "services-2" next to a live "about-us" or "services" is a stale copy.
-  const paths = new Set(Array.from(byKey.values(), (e) => new URL(e.url).pathname.replace(/\/+$/, "").toLowerCase()));
+  // A copy of a live page ("/staging/contact", "about-2", "homeold") ranks below the live pages.
+  const live = new Set<string>();
+  for (const url of [...Array.from(byKey.values(), (e) => e.url), ...(opts.known ?? [])]) {
+    try {
+      live.add(pathSegments(new URL(url).pathname).join("/"));
+    } catch {
+      // Not a URL; nothing to compare against.
+    }
+  }
   for (const entry of byKey.values()) {
-    const path = new URL(entry.url).pathname.replace(/\/+$/, "").toLowerCase();
-    const slash = path.lastIndexOf("/");
-    const m = STALE_SUFFIX_RE.exec(path.slice(slash + 1));
-    if (m && paths.has(`${path.slice(0, slash + 1)}${m[1]}`)) entry.score = staleScore(entry.score);
+    const path = new URL(entry.url).pathname;
+    if (pathSegments(path).length && isStaleCopy(path, live)) {
+      entry.score = STALE_SCORE;
+      entry.reason = `${entry.reason}, old copy`;
+    }
   }
 
   const sorted = Array.from(byKey.values()).sort(
