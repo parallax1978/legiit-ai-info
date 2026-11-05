@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:check": "psql -h /tmp -p 54329 -U postgres -v ON_ERROR_STOP=1 -q -c \"drop database if exists lai_check\" -c \"create database lai_check\" && psql -h /tmp -p 54329 -U postgres -d lai_check -v ON_ERROR_STOP=1 -q -f supabase/test/harness.sql -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_tighten_rls.sql -f supabase/test/rls_check.sql",
-    "smoke:crawl": "vitest run --config vitest.smoke.mts"
+    "smoke:crawl": "vitest run --config vitest.smoke.mts",
+    "e2e:local": "vitest run --config vitest.e2e.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.5.0",
@@ -40,10 +41,12 @@
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "pg": "^8.23.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.1.0"

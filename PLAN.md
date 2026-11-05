@@ -249,13 +249,28 @@ A final review (11 findings) closed the rest:
   than replacing a reviewed sheet, and a scan is counted before the project
   points at it.
 - Review screen: an address part edited before switching to one line is kept.
+- Extraction: every item key is checked against its quote (credentials as
+  codes on the page, prices in their quote, links shown on the page), social
+  handles count only as "@handle" or "/handle", hours compare as days and
+  minutes, a date the quote does not fully state is cut back to the year, and
+  two people who share a surname stay two people. The false-drop measurement
+  went from 18 to 21 of 211 example values; the three are social links that
+  only passed through the substring loophole this closes.
 
-**Not yet verified end to end.** There was no Supabase project or Anthropic key
-in the build environment, so the magic link, a real scan, and Haiku's actual
-output have not run together. The PostgREST request shapes were checked against
-postgrest-js and the documented syntax, the migrations against PostgreSQL 16,
-and the crawler against live sites. The first deploy should run one scan on a
-known site and read crawl_runs.log and llm_calls (see docs/deploy.md).
+**Verified locally, end to end.** `pnpm e2e:local` runs a whole scan on
+PostgreSQL 16 through the real route handlers, run machine, crawler, extraction,
+verification, and merge, with stand-ins for PostgREST, Storage, the Anthropic
+API, and the site. It found three crawler problems the unit tests could not:
+pages were fetched without the trailing slash the site publishes (a redirect
+per WordPress page, a 404 on servers that do not redirect), a menu link that
+redirects to a sitemap page was read and paid for twice, and redirect hops were
+not checked against robots.txt.
+
+**Not yet verified with the real services.** There was no Supabase project or
+Anthropic key in the build environment, so the magic link, real PostgREST and
+Storage, and Haiku's actual output have not run together. The first deploy
+should run one scan on a known site and read crawl_runs.log and llm_calls (see
+docs/deploy.md).
 
 **Open items for later slices**
 - Usage caps on POST /api/projects and POST /api/projects/[id]/runs (slice 5).

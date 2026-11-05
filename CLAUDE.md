@@ -14,6 +14,7 @@ pnpm typecheck    # tsc --noEmit
 pnpm lint         # eslint
 pnpm test         # vitest run
 pnpm db:check     # apply migrations to a local PostgreSQL and run the RLS checks (needs a running server, see below)
+pnpm e2e:local    # the whole scan through the route handlers on a local PostgreSQL (same server as db:check)
 SITES=https://a.com,https://b.com pnpm smoke:crawl   # live crawl, no database or model; writes smoke-crawl-report.txt
 ```
 
@@ -27,6 +28,17 @@ resolves names itself, so the connect-time private-address check does not run).
 Local migration check: start PostgreSQL 16 on port 54329 with trust auth, create a
 database `lai`, then `pnpm db:check`. The harness in `supabase/test/harness.sql`
 stands in for the `auth` and `storage` schemas Supabase manages.
+
+`pnpm e2e:local` recreates the database `lai_e2e`, applies every migration, and
+drives a scan of a made-up roofing site through the real route handlers: create
+the project, step the run to a fact sheet, edit it concurrently, re-run from
+stored pages, and race two steps for the lock. Every query runs on PostgreSQL
+through supabase-js. `scripts/e2e/postgrest-lite.ts` stands in for PostgREST and
+Storage (it builds PostgREST's SQL, so constraint, enum, NULL, and timestamp
+behavior is PostgreSQL's own), and `scripts/e2e/fakes.ts` stands in for the
+site and the Anthropic API. Run it after changing queries, migrations, the run
+state machine, or route handlers. When the app starts using a PostgREST feature
+the stand-in does not answer (embedding, RPC), it fails loudly; add it there.
 
 ## Layout
 
