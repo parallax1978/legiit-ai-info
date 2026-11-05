@@ -59,8 +59,11 @@ export async function createRun(
 
   try {
     if (source) run = await copyPages(db, run, project, userId, source, homeUrl, cursor, now);
-    await q.updateProject(db, project.id, { latest_crawl_run_id: run.id, status: "crawling" });
+    // Counted before the project points at the run, so every scan that starts is counted
+    // (the usage caps read these events); a scan that cannot be counted does not start.
     await q.insertUsageEvent(db, userId, project.id, "crawl_started");
+    // Last, so a failure anywhere above leaves the project on its previous run and status.
+    await q.updateProject(db, project.id, { latest_crawl_run_id: run.id, status: "crawling" });
   } catch (e) {
     // Nothing should step a run that was not set up; mark it failed and report the error.
     await q
