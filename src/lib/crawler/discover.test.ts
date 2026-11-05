@@ -178,3 +178,37 @@ describe("discoverSite probes for key pages it cannot see", () => {
     expect(requested.filter((u) => /\/(about-us|team|contact-us|faqs)$/.test(u))).toEqual([]);
   });
 });
+
+describe("discoverSite on a WordPress site with plain permalinks", () => {
+  it("queues the ?page_id= pages from the sitemap and the home page links", async () => {
+    const HOME = '<html><body><nav><a href="/?page_id=2">About Us</a><a href="/?page_id=5">Services</a><a href="/?page_id=7">Contact</a></nav><main><p>Hi</p></main></body></html>';
+    const SITEMAP = `<urlset>${["/", "/?page_id=2", "/?page_id=5", "/?page_id=7", "/?page_id=9"].map((p) => `<url><loc>https://plainwp.example.com${p.replace(/&/g, "&amp;")}</loc></url>`).join("")}</urlset>`;
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === "https://plainwp.example.com/") return new Response(HOME, { headers: { "content-type": "text/html" } });
+      if (url === "https://plainwp.example.com/robots.txt") return new Response("Sitemap: https://plainwp.example.com/wp-sitemap.xml\n", { headers: { "content-type": "text/plain" } });
+      if (url === "https://plainwp.example.com/wp-sitemap.xml") return new Response(SITEMAP, { headers: { "content-type": "application/xml" } });
+      return new Response("nope", { status: 404 });
+    };
+    const result = await discoverSite("https://plainwp.example.com/", { ...opts, maxPages: 10, fetchImpl });
+    expect(result.usedSitemap).toBe(true);
+    expect(result.queue.map((q) => q.url)).toEqual(
+      expect.arrayContaining([
+        "https://plainwp.example.com/?page_id=2",
+        "https://plainwp.example.com/?page_id=5",
+        "https://plainwp.example.com/?page_id=7",
+        "https://plainwp.example.com/?page_id=9",
+      ]),
+    );
+  });
+
+  it("follows links when the sitemap lists nothing crawlable", async () => {
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === "https://e2.example.com/sitemap.xml") return new Response("<urlset><url><loc>https://e2.example.com/brochure.pdf</loc></url></urlset>", { headers: { "content-type": "application/xml" } });
+      return new Response("nope", { status: 404 });
+    };
+    const result = await discoverSite("https://e2.example.com/", { ...opts, fetchImpl });
+    expect(result.usedSitemap).toBe(false);
+  });
+});

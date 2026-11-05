@@ -221,13 +221,20 @@ describe("rankUrl on real-site slugs", () => {
     expect(article.score).toBeLessThan(rankUrl("https://e.com/our-team").score);
   });
 
-  it("pushes stale copies below the live page", () => {
-    expect(rankUrl("https://e.com/adult-individual-therapy-old").score).toBeLessThan(
-      rankUrl("https://e.com/adult-individual-therapy").score,
-    );
-    expect(rankUrl("https://e.com/about-2").score).toBeLessThan(rankUrl("https://e.com/about").score);
+  it("pushes copies in staging or old folders below the live pages, however they are linked", () => {
     expect(rankUrl("https://e.com/staging/contact").score).toBeLessThan(rankUrl("https://e.com/faq").score);
     expect(rankUrl("https://e.com/staging/contact", "Contact").score).toBeLessThan(rankUrl("https://e.com/faq").score);
+    expect(rankUrl("https://e.com/old/about").score).toBeLessThan(rankUrl("https://e.com/services").score);
+  });
+
+  it("does not treat real pages that use those words as stale", () => {
+    expect(rankUrl("https://it.example/services/cloud-backup").reason).not.toBe("page");
+    expect(rankUrl("https://it.example/services/cloud-backup").score).toBeGreaterThan(rankUrl("https://it.example/blog").score);
+    expect(rankUrl("https://tutor.example/test-prep").score).toBe(rankUrl("https://tutor.example/anything").score);
+    expect(rankUrl("https://e.com/old-town-office").score).toBe(rankUrl("https://e.com/new-town-office").score);
+    // A folder name on its own is a page: a copywriter's "/copy", a home stager's "/staging".
+    expect(rankUrl("https://writer.example/copy").score).toBe(rankUrl("https://writer.example/anything").score);
+    expect(rankUrl("https://stager.example/staging").score).toBe(rankUrl("https://stager.example/anything").score);
   });
 
   it("only lets short link text name a page", () => {
@@ -257,5 +264,47 @@ describe("rankUrls with home page links", () => {
     expect(ranked.findIndex((r) => r.url.endsWith("/how-it-works"))).toBeLessThan(
       ranked.findIndex((r) => r.url.endsWith("/EP")),
     );
+  });
+});
+
+describe("rankUrls with stale siblings and root queries", () => {
+  it("pushes a suffixed copy below its live sibling only when the sibling exists", () => {
+    const ranked = rankUrls(
+      [
+        { url: "https://e.com/" },
+        { url: "https://e.com/about-2" },
+        { url: "https://e.com/about" },
+        { url: "https://e.com/adult-individual-therapy-old" },
+        { url: "https://e.com/adult-individual-therapy" },
+        { url: "https://e.com/phase-2" },
+      ],
+      { home: "https://e.com/", max: 10 },
+    );
+    const at = (p: string) => ranked.findIndex((r) => r.url === `https://e.com${p}`);
+    expect(at("/about-2")).toBeGreaterThan(at("/about"));
+    expect(at("/adult-individual-therapy-old")).toBeGreaterThan(at("/adult-individual-therapy"));
+    // No "/phase" page, so "/phase-2" is a real page.
+    expect(rankUrl("https://e.com/phase-2").score).toBe(rankUrl("https://e.com/anything").score);
+  });
+
+  it("keeps WordPress plain-permalink pages and drops only home variants", () => {
+    const ranked = rankUrls(
+      [
+        { url: "https://plainwp.example.com/" },
+        { url: "https://plainwp.example.com/?page_id=2", text: "About Us", fromHome: true },
+        { url: "https://plainwp.example.com/?page_id=7", text: "Contact", fromHome: true },
+        { url: "https://plainwp.example.com/?p=41" },
+        { url: "https://plainwp.example.com/?lang=fr" },
+        { url: "https://plainwp.example.com/?r=0" },
+      ],
+      { home: "https://plainwp.example.com/", max: 10 },
+    );
+    expect(ranked.map((r) => r.url)).toEqual([
+      "https://plainwp.example.com/",
+      "https://plainwp.example.com/?page_id=2",
+      "https://plainwp.example.com/?page_id=7",
+      "https://plainwp.example.com/?p=41",
+    ]);
+    expect(ranked[1].reason).toBe("about (link text)");
   });
 });

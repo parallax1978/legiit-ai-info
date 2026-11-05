@@ -474,8 +474,18 @@ const LANGUAGE_CODES = new Set([
 ]);
 const LOCALE_RE = /^([a-z]{2})(?:[-_]([a-z]{2}))?$/;
 
-/** Tokens that mark a stale or duplicate page: "adult-therapy-old", "about-copy", "about-2". */
-const STALE_TOKENS = new Set(["old", "copy", "draft", "test", "backup", "temp", "staging", "dup", "duplicate"]);
+/**
+ * Folder names that hold copies of the live site ("/staging/contact",
+ * "/old/about"). Only a parent folder counts: "cloud-backup", "test-prep",
+ * a copywriter's "/copy", and a home stager's "/staging" are real pages.
+ */
+const STALE_DIRS = new Set(["staging", "stage", "old", "draft", "drafts", "test", "tests", "backup", "temp", "tmp", "dev", "copy"]);
+
+/** Suffixes that mark a copy of a sibling page: "about-us-old", "services-2". Only counted when the sibling exists. */
+const STALE_SUFFIX_RE = /^(.+?)-(?:old|copy|draft|backup|temp|test|dup|duplicate|\d)$/;
+
+/** Query keys that leave the home page the same page: "/?lang=en", "/?r=0". */
+const HOME_QUERY_KEYS = new Set(["lang", "language", "locale", "hl", "r", "ref", "src", "source", "from", "amp", "v", "view", "s"]);
 
 const HOME_SCORE = 1000;
 const GENERIC_SCORE = 300;
@@ -561,6 +571,12 @@ function isHomePath(path: string): boolean {
   return path === "/" || path === "";
 }
 
+/** True when every query key leaves the page the same page (a language, a referral marker). */
+function isHomeQuery(u: URL): boolean {
+  const keys = Array.from(new URLSearchParams(u.search).keys());
+  return keys.length > 0 && keys.every((k) => HOME_QUERY_KEYS.has(k.toLowerCase()));
+}
+
 /** Common first-level landing paths that are the home page under another name. */
 const HOME_ALIAS_RE = /^\/(home|index(\.php|\.html?)?|main|welcome)\/?$/i;
 
@@ -582,7 +598,8 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
   }
 
   const path = u.pathname.replace(/\/+$/, "") || "/";
-  if (isHomePath(path)) return { score: HOME_SCORE, reason: "home page" };
+  // "/?page_id=2" is a page of its own (WordPress plain permalinks); "/?lang=en" is the home page.
+  if (isHomePath(path) && (!u.search || isHomeQuery(u))) return { score: HOME_SCORE, reason: "home page" };
 
   let segments = path.split("/").filter(Boolean).map((s) => {
     try {
@@ -641,9 +658,7 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
   }
 
   // A stale or staging copy ranks low however it is linked; applied after the link text below.
-  const stale =
-    segments.some((seg) => tokenize(seg).some((t) => STALE_TOKENS.has(t))) ||
-    /-\d$/.test(segments[segments.length - 1] ?? "");
+  const stale = segments.slice(0, -1).some((seg) => STALE_DIRS.has(seg.toLowerCase()));
 
   if (linkText) {
     const textTokens = tokenize(linkText);
@@ -661,7 +676,12 @@ export function rankUrl(url: string, linkText?: string): { score: number; reason
     }
   }
 
-  return { score: stale ? score - STALE_PENALTY : score, reason };
+  return { score: stale ? staleScore(score) : score, reason };
+}
+
+/** A copy of a live page ranks low, but never below blog posts: a false match must not bury a real page. */
+function staleScore(score: number): number {
+  return Math.max(BLOG_SCORE + 10, score - STALE_PENALTY);
 }
 
 /**
@@ -683,8 +703,9 @@ export function rankUrls(
     if (!looksLikeHtmlPath(normalized)) continue;
     const key = urlKey(normalized);
     if (!key) continue;
-    // "/?r=0" and "/?lang=en" are the home page again.
-    if (key !== homeKey && new URL(normalized).pathname === "/") continue;
+    // "/?r=0" and "/?lang=en" are the home page again; "/?page_id=2" is not.
+    const parsed = new URL(normalized);
+    if (key !== homeKey && parsed.pathname === "/" && (!parsed.search || isHomeQuery(parsed))) continue;
 
     const ranked = key === homeKey ? { score: HOME_SCORE + 100, reason: "home page" } : rankUrl(normalized, c.text);
     const score = ranked.score + (c.fromHome && key !== homeKey ? HOME_LINK_BONUS : 0);
@@ -695,6 +716,15 @@ export function rankUrls(
       existing.score = score;
       existing.reason = ranked.reason;
     }
+  }
+
+  // "about-us-old" or "services-2" next to a live "about-us" or "services" is a stale copy.
+  const paths = new Set(Array.from(byKey.values(), (e) => new URL(e.url).pathname.replace(/\/+$/, "").toLowerCase()));
+  for (const entry of byKey.values()) {
+    const path = new URL(entry.url).pathname.replace(/\/+$/, "").toLowerCase();
+    const slash = path.lastIndexOf("/");
+    const m = STALE_SUFFIX_RE.exec(path.slice(slash + 1));
+    if (m && paths.has(`${path.slice(0, slash + 1)}${m[1]}`)) entry.score = staleScore(entry.score);
   }
 
   const sorted = Array.from(byKey.values()).sort(

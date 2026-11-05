@@ -91,6 +91,9 @@ export async function discoverSite(siteUrl: string, opts: DiscoverOptions): Prom
   }
 
   const queue = kept.slice(0, Math.max(1, opts.maxPages)).map((entry, rank) => ({ ...entry, rank }));
+  const homeKey = urlKey(home);
+  const sitemapKeys = new Set(sitemap.urls.map((u) => urlKey(u)).filter((k): k is string => k !== null && k !== homeKey));
+  const sitemapUsed = ranked.some((r) => sitemapKeys.has(urlKey(r.url) ?? ""));
 
   return {
     home,
@@ -100,7 +103,8 @@ export async function discoverSite(siteUrl: string, opts: DiscoverOptions): Prom
       ...(robots.crawlDelayMs !== undefined ? { crawlDelayMs: robots.crawlDelayMs } : {}),
     },
     sitemapsRead: sitemap.sitemapsRead,
-    usedSitemap: sitemap.urls.length > 0,
+    // Sitemap URLs that survived ranking; a sitemap of nothing crawlable means following links.
+    usedSitemap: sitemapUsed,
     queue,
     blockedByRobots,
   };
