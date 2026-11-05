@@ -55,7 +55,13 @@ export interface FactField {
   /** Free-text note from the extractor or the user. */
   note?: string;
   /** Set when the user edited the field; keeps what the crawl found. */
-  crawled?: { value: FactValue; status: FactStatus; evidence: Evidence[]; candidates?: Candidate[] };
+  crawled?: {
+    value: FactValue;
+    status: FactStatus;
+    evidence: Evidence[];
+    candidates?: Candidate[];
+    itemConflicts?: ListItemConflict[];
+  };
   updatedAt?: string;
 }
 
