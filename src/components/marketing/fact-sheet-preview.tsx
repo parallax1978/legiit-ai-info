@@ -50,7 +50,7 @@ const pill: Record<Row["status"], { label: string; className: string; dot: strin
 
 export function FactSheetPreview() {
   return (
-    <div className="relative">
+    <div className="relative mx-auto w-full min-w-0 max-w-lg lg:max-w-none">
       <div className="absolute -inset-6 rounded-[2rem] bg-brand/40 blur-3xl" aria-hidden="true" />
       <div className="relative rounded-2xl border border-white/10 bg-white p-5 text-ink shadow-pop sm:p-6">
         <p className="eyebrow text-brand">Fact sheet</p>

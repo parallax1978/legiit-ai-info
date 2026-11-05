@@ -6,7 +6,7 @@ export function Hero({ signedIn }: { signedIn: boolean }) {
   return (
     <section className="hero-dark overflow-hidden">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:py-20 lg:grid-cols-[1.05fr_1fr]">
-        <div>
+        <div className="min-w-0">
           <p className="eyebrow text-brand-soft">About page, schema, and install steps</p>
           <h1 className="mt-4 text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl">
             An About page AI can trust,
