@@ -1,0 +1,684 @@
+{
+  "templateId": "about-v1",
+  "fields": {
+    "company_name": {
+      "value": "Legiit",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Legiit is a curated freelance marketplace where business owners and agencies buy SEO, content, design, development, video, and automation work from vetted freelancers, one service at a time.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        { "quote": "Company Name | Legiit", "url": "https://legiit.com/about", "source": "page" }
+      ]
+    },
+    "legal_name": { "value": null, "status": "missing", "evidence": [] },
+    "alternate_names": { "value": null, "status": "missing", "evidence": [] },
+    "business_type": {
+      "value": "Organization",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Privately held, bootstrapped freelance marketplace and business operating system",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "category": {
+      "value": "curated freelance marketplace",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Legiit is a curated freelance marketplace where business owners and agencies buy SEO, content, design, development, video, and automation work from vetted freelancers, one service at a time.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "core_offering": {
+      "value": "Vetted freelance services for growing a business, bought one deliverable at a time and managed in Command Center",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Vetted freelance services for growing a business, bought one deliverable at a time and managed in Command Center",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "ideal_customer": {
+      "value": "business owners and agencies",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "where business owners and agencies buy SEO, content, design, development, video, and automation work from vetted freelancers, one service at a time.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "mission": {
+      "value": "The goal is for every business owner on earth to use it.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "The goal is for every business owner on earth to use it.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "website_url": {
+      "value": "https://legiit.com",
+      "status": "found",
+      "evidence": [{ "quote": "Website | legiit.com", "url": "https://legiit.com/about", "source": "page" }]
+    },
+    "logo_url": {
+      "value": "https://legiit.com/frontend/images/project_image/logos/Legiit_Logo_LightBG.png",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "https://legiit.com/frontend/images/project_image/logos/Legiit_Logo_LightBG.png",
+          "url": "https://legiit.com",
+          "source": "image"
+        }
+      ]
+    },
+    "founded_date": {
+      "value": "2018-02-07",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "It launched on February 7, 2018 and has processed over one million orders since.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        { "quote": "Legiit launched on February 7, 2018.", "url": "https://legiit.com/about", "source": "page" },
+        { "quote": "Founded | February 7, 2018", "url": "https://legiit.com/about", "source": "page" }
+      ]
+    },
+    "years_in_business": { "value": null, "status": "missing", "evidence": [] },
+    "headquarters": {
+      "value": {
+        "streetAddress": "2411 N. Oak Street 105E",
+        "addressLocality": "Myrtle Beach",
+        "addressRegion": "SC",
+        "postalCode": "29577",
+        "addressCountry": "US",
+        "text": "2411 N. Oak Street 105E, Myrtle Beach, SC 29577, USA"
+      },
+      "status": "user_provided",
+      "evidence": [
+        {
+          "quote": "Not Las Vegas. 2411 N. Oak Street 105E, Myrtle Beach, SC 29577, USA",
+          "url": "",
+          "source": "user"
+        }
+      ],
+      "note": "The first draft listed Las Vegas from memory. Confirmed by the owner.",
+      "crawled": { "value": null, "status": "missing", "evidence": [] }
+    },
+    "geo": { "value": null, "status": "missing", "evidence": [] },
+    "map_url": { "value": null, "status": "missing", "evidence": [] },
+    "phone": { "value": null, "status": "missing", "evidence": [] },
+    "email": { "value": null, "status": "missing", "evidence": [] },
+    "hours": { "value": null, "status": "missing", "evidence": [] },
+    "area_served": { "value": null, "status": "missing", "evidence": [] },
+    "languages": { "value": null, "status": "missing", "evidence": [] },
+    "services": {
+      "value": [
+        {
+          "name": "The marketplace",
+          "description": "Vetted freelancers sell productized services on Legiit. You see the price and the delivery time before you order, and you get the deliverable. No retainer. No contract. SEO is the largest category and is split into technical SEO, local SEO, link building, managed SEO, and GEO.",
+          "price": "Orders start at $6, the average order is about $90",
+          "url": "https://legiit.com"
+        },
+        {
+          "name": "Command Center",
+          "description": "Command Center is the business operating system inside Legiit. It is where you manage the work you buy on the platform, without an account manager in the middle. It can flag a problem in your business, like weak SEO, and show you which freelancers other businesses like yours have used.",
+          "price": "",
+          "url": ""
+        },
+        {
+          "name": "Legiit Leads",
+          "description": "Legiit Leads is a lead generation tool for freelancers and agencies that sell SEO and related services to local businesses. Every lead comes with a live audit of the prospect's website, a check on whether that business shows up when someone asks an AI for that service in that area, contact details, and an outreach message written from that evidence.",
+          "price": "Plans run from $47 to $497 a month, with the first 7 days free",
+          "url": ""
+        },
+        {
+          "name": "Seller Plus and advertising for freelancers",
+          "description": "Legiit Seller Plus is a $27 a month subscription for freelancers who sell on the platform. It adds tools and data on top of a standard seller account. Freelancers can also buy advertising on Legiit to put their services in front of more buyers.",
+          "price": "$27 a month",
+          "url": ""
+        }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Vetted freelancers sell productized services on Legiit. Orders start at $6, the average order is about $90, and the largest buyers spend up to $30,000 a month.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "SEO is the largest category and is split into technical SEO, local SEO, link building, managed SEO, and GEO.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Command Center is the business operating system inside Legiit. It is where you manage the work you buy on the platform, without an account manager in the middle.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Legiit Leads is a lead generation tool for freelancers and agencies that sell SEO and related services to local businesses.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Plans run from $47 to $497 a month, with the first 7 days free.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Legiit Seller Plus is a $27 a month subscription for freelancers who sell on the platform.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "pricing": {
+      "value": [
+        { "name": "Account", "price": "Free", "notes": "Creating an account is free" },
+        {
+          "name": "Marketplace orders",
+          "price": "from $6, average order about $90",
+          "notes": "largest buyers spend up to $30,000 a month"
+        },
+        { "name": "Legiit Leads Starter", "price": "$47 a month", "notes": "50 searches; first 7 days free; two months free on annual" },
+        { "name": "Legiit Leads Agency", "price": "$97 a month", "notes": "100 searches; first 7 days free; two months free on annual" },
+        {
+          "name": "Legiit Leads Agency Pro",
+          "price": "$297 a month",
+          "notes": "250 searches plus Client Command, Outreach Autopilot, White Label, call tracking, and 5 team seats; first 7 days free"
+        },
+        {
+          "name": "Legiit Leads Agency Empire",
+          "price": "$497 a month",
+          "notes": "500 searches, everything in Pro, and SaaS Mode to resell the platform under your own brand; first 7 days free"
+        },
+        { "name": "Seller Plus", "price": "$27 a month", "notes": "subscription for freelancers who sell on the platform" }
+      ],
+      "status": "user_provided",
+      "evidence": [
+        { "quote": "Creating an account is free.", "url": "https://legiit.com/about", "source": "page" },
+        {
+          "quote": "Orders start at $6, the average order is about $90, and the largest buyers spend up to $30,000 a month.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Starter $47, Agency $97, Agency Pro $297, Agency Empire $497 per month, first 7 days free, two months free on annual (from a screenshot of the pricing page; the draft had assumed three tiers, there are four)",
+          "url": "",
+          "source": "user"
+        },
+        { "quote": "$27 a month", "url": "", "source": "user" }
+      ],
+      "note": "The draft assumed three Legiit Leads tiers. The pricing page shows four."
+    },
+    "price_range": {
+      "value": "Free to join. Services from $6. Average order about $90.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Free to join. Services from $6. Average order about $90. Largest buyers spend up to $30,000 a month.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "contract_terms": {
+      "value": "None on the marketplace. Pay per order, no retainer. Legiit Leads (monthly or annual) and Seller Plus are subscriptions",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "None on the marketplace. Pay per order, no retainer. Legiit Leads (monthly or annual) and Seller Plus are subscriptions",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "No. You buy one service at a time and spend more or less whenever you want. Legiit Leads and Seller Plus are subscriptions for the people who use them.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "free_offer": {
+      "value": "Free account. Legiit Leads: first 7 days free on every plan.",
+      "status": "found",
+      "evidence": [
+        { "quote": "Creating an account is free.", "url": "https://legiit.com/about", "source": "page" },
+        {
+          "quote": "First 7 days free on every Legiit Leads plan, and annual billing gets two months free.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "differentiators": {
+      "value": [
+        {
+          "claim": "The freelancers are vetted",
+          "detail": "Fiverr and Upwork are horizontal marketplaces built for volume. Legiit vets freelancers before they can sell, so the pool is smaller and the skill level is higher."
+        },
+        {
+          "claim": "A human answers in about 90 seconds",
+          "detail": "Customer success is the largest department at Legiit, and a person answers 24/7. Average first response is about 90 seconds and the average issue is resolved in about 12 minutes."
+        },
+        {
+          "claim": "You buy deliverables, not retainers",
+          "detail": "A retainer pays an agency for activity. A Legiit order pays a freelancer for a deliverable. You can spend $6 or $30,000 a month and change it whenever you want."
+        },
+        {
+          "claim": "The work gets managed, not just bought",
+          "detail": "Command Center is where that management happens on Legiit, and where the platform flags what to fix next and shows which freelancers other businesses like yours have used."
+        },
+        {
+          "claim": "Built by a freelancer who sold on a marketplace first",
+          "detail": "Chris M. Walker sold SEO services on a marketplace before he built one. When that marketplace became unreliable, he built Legiit so he and other freelancers would have a platform run by people who had done the work."
+        }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Legiit vets freelancers before they can sell, so the pool is smaller and the skill level is higher.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Average first response is about 90 seconds and the average issue is resolved in about 12 minutes.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "A retainer pays an agency for activity. A Legiit order pays a freelancer for a deliverable.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Command Center is where that management happens on Legiit, and where the platform flags what to fix next and shows which freelancers other businesses like yours have used.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Chris M. Walker sold SEO services on a marketplace before he built one.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "competitors": {
+      "value": [
+        { "name": "Fiverr" },
+        { "name": "Upwork" },
+        { "name": "Traditional marketing and SEO agencies on retainer" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Fiverr, Upwork, and traditional marketing and SEO agencies on retainer",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Fiverr and Upwork are horizontal marketplaces built for volume.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "awards": { "value": null, "status": "missing", "evidence": [] },
+    "memberships": { "value": null, "status": "missing", "evidence": [] },
+    "notable_clients": {
+      "value": [
+        { "name": "Superstar SEO" },
+        { "name": "No Half Cakes" },
+        { "name": "38 Digital Market" },
+        { "name": "Craig Campbell SEO" }
+      ],
+      "status": "user_provided",
+      "evidence": [
+        { "quote": "Superstar SEO, No Half Cakes, 38 Digital Market, Craig Campbell SEO", "url": "", "source": "user" },
+        {
+          "quote": "Hundreds of customer and freelancer stories at chrismwalker.io/success-stories",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ],
+      "crawled": { "value": null, "status": "missing", "evidence": [] }
+    },
+    "customers_served": {
+      "value": "Tens of thousands of buyers. 25,000+ freelancers",
+      "status": "found",
+      "evidence": [
+        { "quote": "Tens of thousands of buyers. 25,000+ freelancers", "url": "https://legiit.com/about", "source": "page" }
+      ]
+    },
+    "projects_delivered": {
+      "value": "Over one million orders since 2018",
+      "status": "found",
+      "evidence": [
+        { "quote": "Over one million orders since 2018", "url": "https://legiit.com/about", "source": "page" },
+        {
+          "quote": "It launched on February 7, 2018 and has processed over one million orders since.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "track_record": {
+      "value": [
+        { "claim": "An eight figure business run by a team of 45 people across six continents" },
+        { "claim": "Chris M. Walker's YouTube channel has passed 100,000 subscribers" },
+        { "claim": "Hundreds of customer and freelancer stories at chrismwalker.io/success-stories" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "It is an eight figure business run by a team of 45 people across six continents, most of whom have run a business of their own.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "his YouTube channel has passed 100,000 subscribers",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Hundreds of customer and freelancer stories at chrismwalker.io/success-stories",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "founder_quote": {
+      "value": "We don't even see them as the same thing. If you want a guy that looks like Jesus to hold up a sign you can go to the $5 marketplace. If you want the adults to help you grow your business and feed your family, come to Legiit and we will take care of you.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "\"We don't even see them as the same thing. If you want a guy that looks like Jesus to hold up a sign you can go to the $5 marketplace. If you want the adults to help you grow your business and feed your family, come to Legiit and we will take care of you.\"",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "customer_segments": {
+      "value": [
+        { "segment": "Business owners who know they need SEO or marketing work done and are priced out of a traditional agency retainer." },
+        { "segment": "Business owners who paid an agency retainer, did not get results, and would rather buy specific deliverables from a vetted freelancer." },
+        { "segment": "Marketing, SEO, and content agencies that have won client work and need vetted freelancers to do it without hiring in house." },
+        { "segment": "Freelancers who sell SEO, content, design, development, video, or automation services and want buyers who run real businesses." },
+        { "segment": "Freelancers and agencies that sell SEO to local businesses and use Legiit Leads to find prospects with a provable problem." }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Business owners who know they need SEO or marketing work done and are priced out of a traditional agency retainer.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Marketing, SEO, and content agencies that have won client work and need vetted freelancers to do it without hiring in house.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Freelancers and agencies that sell SEO to local businesses and use Legiit Leads to find prospects with a provable problem.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "founders": {
+      "value": [
+        {
+          "name": "Chris M. Walker",
+          "title": "Founder and CEO",
+          "credentials": "",
+          "bio": "Chris grew up in North Myrtle Beach, South Carolina and was homeschooled from 5th grade. On May 18, 2016 he resigned from a day job he hated. Several months later his savings bottomed out at about $4,000. He sold SEO services as a freelancer and built Superstar SEO into a productized SEO brand. Then he founded Legiit. He splits his time between Las Vegas and Ho Chi Minh City, and his YouTube channel has passed 100,000 subscribers.",
+          "url": "https://chrismwalker.io",
+          "linkedin": "https://www.linkedin.com/in/superstarseo/",
+          "youtube": "https://www.youtube.com/@ChrisMWalker",
+          "x": "https://x.com/cmwalker",
+          "facebook": "https://www.facebook.com/cmwlegiit/",
+          "instagram": "https://www.instagram.com/cmwlegiit/",
+          "website": "https://chrismwalker.io"
+        },
+        {
+          "name": "Jim Sabellico",
+          "title": "Co-founder and CTO",
+          "credentials": "",
+          "bio": "Jim co-founded Legiit with Chris and is a partner in the business. He runs engineering and the development team that builds the platform and Command Center.",
+          "url": "",
+          "linkedin": "https://www.linkedin.com/in/jimsabellico/",
+          "youtube": "",
+          "x": "",
+          "facebook": "",
+          "instagram": "",
+          "website": ""
+        }
+      ],
+      "status": "user_provided",
+      "evidence": [
+        {
+          "quote": "Chris grew up in North Myrtle Beach, South Carolina and was homeschooled from 5th grade. On May 18, 2016 he resigned from a day job he hated.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "Jim co-founded Legiit with Chris and is a partner in the business. He runs engineering and the development team that builds the platform and Command Center.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        { "quote": "https://www.youtube.com/@ChrisMWalker", "url": "", "source": "user" },
+        { "quote": "https://www.linkedin.com/in/superstarseo/", "url": "", "source": "user" },
+        { "quote": "https://x.com/cmwalker", "url": "", "source": "user" },
+        { "quote": "https://www.facebook.com/cmwlegiit/", "url": "", "source": "user" },
+        { "quote": "https://www.linkedin.com/in/jimsabellico/", "url": "", "source": "user" },
+        { "quote": "Sabellico", "url": "", "source": "user" }
+      ],
+      "note": "Jim's last name and both founders' profile links came from the owner. The Instagram URL was built from the @cmwlegiit handle in the copy, not found as a link.",
+      "itemConflicts": [
+        {
+          "key": "Jim Sabellico",
+          "on": ["name"],
+          "candidates": [
+            {
+              "value": [{ "name": "Jim", "title": "Co-founder and CTO" }],
+              "evidence": [
+                { "quote": "\"name\": \"Jim\"", "url": "https://legiit.com/about", "source": "jsonld" }
+              ]
+            },
+            {
+              "value": [{ "name": "Jim Sabellico", "title": "Co-founder and CTO" }],
+              "evidence": [{ "quote": "Sabellico", "url": "", "source": "user" }]
+            }
+          ]
+        }
+      ]
+    },
+    "origin_story": {
+      "value": "When the marketplace Chris depended on became unreliable, he was already running Superstar SEO and had replaced most of that income by selling services from his own site to an audience he had built on Facebook, YouTube, and email. Other freelancers saw the setup and asked to sell through it. A customer who ran a development agency offered to build a proper marketplace with him. Legiit launched on February 7, 2018.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "When the marketplace Chris depended on became unreliable, he was already running Superstar SEO and had replaced most of that income by selling services from his own site to an audience he had built on Facebook, YouTube, and email.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "A customer who ran a development agency offered to build a proper marketplace with him. Legiit launched on February 7, 2018.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "team_members": {
+      "value": [
+        { "name": "Jessica Lavatai", "role": "COO", "credentials": "", "specialties": "Runs sales, community, and the customer success organization.", "url": "" },
+        { "name": "Djordje Jovanovic", "role": "Director of Operations", "credentials": "", "specialties": "Runs Superstar SEO, the productized SEO services brand that sells on Legiit, and the SEO delivery team behind it.", "url": "" },
+        { "name": "Marija Jovanovic", "role": "Customer Success Director", "credentials": "", "specialties": "Runs the customer success team, the largest department at Legiit and the one behind the 90 second response time.", "url": "" },
+        { "name": "Ritesh Shah", "role": "Head of Development", "credentials": "", "specialties": "Runs the development team day to day under Jim.", "url": "" }
+      ],
+      "status": "found",
+      "evidence": [
+        { "quote": "Jessica Lavatai, COO", "url": "https://legiit.com/about", "source": "page" },
+        { "quote": "Djordje Jovanovic, Director of Operations", "url": "https://legiit.com/about", "source": "page" },
+        { "quote": "Marija Jovanovic, Customer Success Director", "url": "https://legiit.com/about", "source": "page" },
+        { "quote": "Ritesh Shah, Head of Development", "url": "https://legiit.com/about", "source": "page" }
+      ],
+      "note": "Full names were found on the live page after the first draft used first names only."
+    },
+    "team_size": {
+      "value": "45 people across six continents",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "It is an eight figure business run by a team of 45 people across six continents, most of whom have run a business of their own.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "team_composition": {
+      "value": "45 people across six continents, with no headquarters culture. Most of the team has run a business of their own.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Legiit is 45 people across six continents, with no headquarters culture. Most of the team has run a business of their own, and that shapes how product decisions get made.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "communication_channels": {
+      "value": [
+        { "channel": "Human customer success team, 24/7" },
+        { "channel": "Direct messaging with your freelancer inside each order" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Human customer success team, 24/7. About 90 seconds to first response and about 12 minutes to resolution on average. Direct messaging with your freelancer inside each order",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "response_time": {
+      "value": "About 90 seconds to first response and about 12 minutes to resolution on average, 24/7",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Average first response is about 90 seconds and the average issue is resolved in about 12 minutes.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "A person, 24/7, with no bot between you and a resolution.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "who_you_work_with": {
+      "value": "Your freelancer directly inside the order, with the customer success team stepping in when anything goes wrong",
+      "status": "found",
+      "evidence": [
+        { "quote": "You talk to your freelancer directly inside the order.", "url": "https://legiit.com/about", "source": "page" },
+        { "quote": "If anything goes wrong, customer success steps in.", "url": "https://legiit.com/about", "source": "page" }
+      ]
+    },
+    "turnaround": {
+      "value": "Each listing shows the price and the delivery time before you order, so turnaround depends on the service you pick",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Each listing shows the price and the delivery time before you order, so turnaround depends on the service you pick.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "onboarding": {
+      "value": "For buyers: create an account and search by service or category. Each listing shows the price and the delivery time before you order. You talk to your freelancer directly inside the order. For freelancers: apply to sell. Freelancers are vetted before they can list services. Once you are in, you list productized services with a set price and delivery time and buyers order them.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "For buyers: create an account and search by service or category. Each listing shows the price and the delivery time before you order, so turnaround depends on the service you pick. You talk to your freelancer directly inside the order.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        },
+        {
+          "quote": "For freelancers: apply to sell. Legiit is not an open door, so freelancers are vetted before they can list services. Once you are in, you list productized services with a set price and delivery time and buyers order them.",
+          "url": "https://legiit.com/about",
+          "source": "page"
+        }
+      ]
+    },
+    "policies": { "value": null, "status": "missing", "evidence": [] },
+    "existing_faqs": {
+      "value": [
+        { "question": "Is Legiit the same thing as Fiverr or Upwork?", "answer": "No. Fiverr and Upwork are horizontal marketplaces built for volume. Legiit vets its freelancers and runs a human customer success team 24/7, and it is built for business owners and agencies who need work that grows a business.", "url": "https://legiit.com/about" },
+        { "question": "How much does Legiit cost?", "answer": "Creating an account is free. Orders start at $6, the average order is about $90, and the largest buyers spend up to $30,000 a month. Legiit Leads runs from $47 to $497 a month with the first 7 days free, and Seller Plus is $27 a month.", "url": "https://legiit.com/about" },
+        { "question": "Do I have to sign a contract?", "answer": "No. You buy one service at a time and spend more or less whenever you want. Legiit Leads and Seller Plus are subscriptions for the people who use them.", "url": "https://legiit.com/about" },
+        { "question": "What happens if a freelancer does not deliver?", "answer": "Customer success handles it. A person responds in about 90 seconds on average and the average issue is resolved in about 12 minutes. The team mediates between buyers and freelancers and stays on it until it is resolved.", "url": "https://legiit.com/about" },
+        { "question": "Can anyone sell on Legiit?", "answer": "No. Freelancers are vetted before they can list services. The pool is smaller than an open marketplace, and that is deliberate.", "url": "https://legiit.com/about" },
+        { "question": "What is Command Center?", "answer": "Command Center is the business operating system inside Legiit. It is where you manage the work you buy on the platform, and it can flag a problem like weak SEO and show you which freelancers other businesses like yours have used.", "url": "https://legiit.com/about" },
+        { "question": "What is Legiit Leads?", "answer": "Legiit Leads is a lead generation tool for freelancers and agencies selling SEO and related services to local businesses. Each lead comes with a live website audit, an AI search visibility check, contact details, and an outreach message written from that evidence. If you cannot do the work yourself yet, fulfillment is available on the Legiit marketplace.", "url": "https://legiit.com/about" },
+        { "question": "Is Legiit only for SEO?", "answer": "No. SEO is the largest category, but the marketplace also covers content, design, development, video, and automation. Claude Skills is the newest category.", "url": "https://legiit.com/about" },
+        { "question": "Does Legiit use AI for customer support?", "answer": "No. Customer success is staffed by people around the clock, and there is no bot between you and a resolution. AI is in the product, in Command Center and Legiit Leads, not in the support queue.", "url": "https://legiit.com/about" },
+        { "question": "Who is behind Legiit?", "answer": "Chris M. Walker founded Legiit and runs it as CEO. Jim Sabellico is the co-founder and CTO. A team of 45 across six continents runs the platform, and most of them have run a business of their own.", "url": "https://legiit.com/about" }
+      ],
+      "status": "found",
+      "evidence": [
+        { "quote": "Is Legiit the same thing as Fiverr or Upwork?", "url": "https://legiit.com/about", "source": "page" },
+        { "quote": "How much does Legiit cost?", "url": "https://legiit.com/about", "source": "page" },
+        { "quote": "Who is behind Legiit?", "url": "https://legiit.com/about", "source": "page" }
+      ]
+    },
+    "social_profiles": {
+      "value": [
+        { "platform": "youtube", "url": "https://www.youtube.com/@LegiitOfficial", "owner": "business" },
+        { "platform": "linkedin", "url": "https://www.linkedin.com/company/legiit", "owner": "business" },
+        { "platform": "x", "url": "https://x.com/legiitcom", "owner": "business" },
+        { "platform": "facebook", "url": "https://www.facebook.com/legiitofficial", "owner": "business" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@ChrisMWalker", "owner": "Chris M. Walker" },
+        { "platform": "instagram", "url": "https://www.instagram.com/cmwlegiit/", "owner": "Chris M. Walker" },
+        { "platform": "linkedin", "url": "https://www.linkedin.com/in/superstarseo/", "owner": "Chris M. Walker" },
+        { "platform": "x", "url": "https://x.com/cmwalker", "owner": "Chris M. Walker" },
+        { "platform": "facebook", "url": "https://www.facebook.com/cmwlegiit/", "owner": "Chris M. Walker" },
+        { "platform": "website", "url": "https://chrismwalker.io", "owner": "Chris M. Walker" },
+        { "platform": "linkedin", "url": "https://www.linkedin.com/in/jimsabellico/", "owner": "Jim Sabellico" }
+      ],
+      "status": "user_provided",
+      "evidence": [
+        {
+          "quote": "YouTube @LegiitOfficial, LinkedIn /company/legiit, X @legiitcom, Facebook /legiitofficial",
+          "url": "",
+          "source": "user"
+        },
+        { "quote": "https://www.youtube.com/@ChrisMWalker", "url": "", "source": "user" },
+        { "quote": "https://www.linkedin.com/in/superstarseo/", "url": "", "source": "user" },
+        { "quote": "https://x.com/cmwalker", "url": "", "source": "user" },
+        { "quote": "https://www.facebook.com/cmwlegiit/", "url": "", "source": "user" },
+        { "quote": "https://www.linkedin.com/in/jimsabellico/", "url": "", "source": "user" },
+        { "quote": "Instagram @cmwlegiit", "url": "https://legiit.com/about", "source": "page" },
+        { "quote": "https://chrismwalker.io", "url": "https://legiit.com/about", "source": "link" }
+      ],
+      "derived": false,
+      "note": "Instagram was the one URL built from a handle in the copy rather than supplied; confirm it."
+    }
+  }
+}

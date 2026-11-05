@@ -1,0 +1,1090 @@
+{
+  "templateId": "about-v1",
+  "fields": {
+    "company_name": {
+      "value": "Darcy Bailey & Associates Counselling",
+      "status": "conflict",
+      "evidence": [
+        {
+          "quote": "Darcy Bailey & Associates Counselling is a counselling practice in Langley, BC that provides in-person and online therapy for children, teens, adults, couples, and families across British Columbia.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ],
+      "candidates": [
+        {
+          "value": "Darcy Bailey & Associates Counselling",
+          "evidence": [
+            {
+              "quote": "Darcy Bailey & Associates Counselling is a counselling practice in Langley, BC that provides in-person and online therapy for children, teens, adults, couples, and families across British Columbia.",
+              "url": "https://darcybaileycounselling.com/about-us/",
+              "source": "page"
+            },
+            {
+              "quote": "Company Name | Darcy Bailey & Associates Counselling (legal name Darcy Bailey & Associates Counselling Inc.)",
+              "url": "https://darcybaileycounselling.com/about-us/",
+              "source": "page"
+            }
+          ]
+        },
+        {
+          "value": "Darcy Bailey Counselling",
+          "evidence": [
+            { "quote": "\"name\": \"Darcy Bailey Counselling\"", "url": "https://darcybaileycounselling.com/", "source": "jsonld" }
+          ]
+        },
+        {
+          "value": "Darcy Bailey Counselling and Associates",
+          "evidence": [
+            {
+              "quote": "\"name\": \"Darcy Bailey Counselling and Associates\"",
+              "url": "https://darcybaileycounselling.com/",
+              "source": "jsonld"
+            }
+          ]
+        }
+      ],
+      "note": "The BCACC profile and the award badge say Darcy Bailey & Associates Counselling Inc. The site's own schema uses two other names."
+    },
+    "legal_name": {
+      "value": "Darcy Bailey & Associates Counselling Inc.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Company Name | Darcy Bailey & Associates Counselling (legal name Darcy Bailey & Associates Counselling Inc.)",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "alternate_names": {
+      "value": [{ "name": "Darcy Bailey Counselling" }, { "name": "Darcy Bailey and Associates" }],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "\"alternateName\": [\"Darcy Bailey Counselling\", \"Darcy Bailey and Associates\"]",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "jsonld"
+        }
+      ]
+    },
+    "business_type": {
+      "value": "MedicalBusiness",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Privately owned counselling and psychotherapy practice. Registered Clinical Counsellors and Registered Social Workers; no psychologists or psychiatrists on staff",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        { "quote": "\"@type\": [\"MedicalBusiness\", \"LocalBusiness\"]", "url": "https://darcybaileycounselling.com/about-us/", "source": "jsonld" }
+      ]
+    },
+    "category": {
+      "value": "counselling practice in Langley, BC",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Darcy Bailey & Associates Counselling is a counselling practice in Langley, BC that provides in-person and online therapy for children, teens, adults, couples, and families across British Columbia.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "core_offering": {
+      "value": "In-person and online counselling for children (5+), teens, adults, couples, and families, matched to one of 14 registered therapists",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "In-person and online counselling for children (5+), teens, adults, couples, and families, matched to one of 14 registered therapists",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "ideal_customer": {
+      "value": "children, teens, adults, couples, and families across British Columbia",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "provides in-person and online therapy for children, teens, adults, couples, and families across British Columbia.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "mission": { "value": null, "status": "missing", "evidence": [] },
+    "website_url": {
+      "value": "https://darcybaileycounselling.com/",
+      "status": "found",
+      "evidence": [
+        { "quote": "Website | darcybaileycounselling.com", "url": "https://darcybaileycounselling.com/about-us/", "source": "page" },
+        { "quote": "\"url\": \"https://darcybaileycounselling.com/\"", "url": "https://darcybaileycounselling.com/about-us/", "source": "jsonld" }
+      ]
+    },
+    "logo_url": {
+      "value": "https://darcybaileycounselling.com/wp-content/uploads/2026/10/DBA_LOGO-NEW-e1793212060559.png",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "https://darcybaileycounselling.com/wp-content/uploads/2026/10/DBA_LOGO-NEW-e1793212060559.png",
+          "url": "https://darcybaileycounselling.com/",
+          "source": "image"
+        }
+      ],
+      "note": "1080 by 320. The live schema still points to a 2023 logo file."
+    },
+    "founded_date": {
+      "value": null,
+      "status": "missing",
+      "evidence": [],
+      "note": "No page gives a year. The years-in-business claims disagree; see that field."
+    },
+    "years_in_business": {
+      "value": "17+ years",
+      "status": "conflict",
+      "evidence": [
+        { "quote": "serving Langley for 17+ years", "url": "https://darcybaileycounselling.com/about-us/", "source": "page" }
+      ],
+      "candidates": [
+        {
+          "value": "17+ years",
+          "evidence": [
+            { "quote": "serving Langley for 17+ years", "url": "https://darcybaileycounselling.com/about-us/", "source": "page" }
+          ]
+        },
+        {
+          "value": "19+ years",
+          "evidence": [
+            { "quote": "19+ years of counselling in Langley", "url": "https://darcybaileycounselling.com/", "source": "page" }
+          ]
+        },
+        {
+          "value": "more than two decades",
+          "evidence": [
+            {
+              "quote": "has served the Langley community for more than two decades",
+              "url": "https://darcybaileycounselling.com/best-in-langley-2025/",
+              "source": "page"
+            }
+          ]
+        }
+      ],
+      "note": "The About page says 17+ years, the homepage says 19+ years, and a September 2025 press release says more than two decades. One number has to win."
+    },
+    "headquarters": {
+      "value": {
+        "streetAddress": "#315, 20385 64 Avenue",
+        "addressLocality": "Langley",
+        "addressRegion": "BC",
+        "postalCode": "V2Y 1N5",
+        "addressCountry": "CA",
+        "text": "#315, 20385 64 Avenue, Langley, BC V2Y 1N5, Canada"
+      },
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "#315, 20385 64 Avenue, Langley, BC V2Y 1N5, Canada. Single office, beside Costco, free parking",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "In-person sessions are at #315, 20385 64 Avenue, Langley, with free parking.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "{\"@type\": \"PostalAddress\", \"streetAddress\": \"#315, 20385 64 Avenue\", \"addressLocality\": \"Langley\", \"addressRegion\": \"BC\", \"postalCode\": \"V2Y 1N5\", \"addressCountry\": \"CA\"}",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "jsonld"
+        }
+      ]
+    },
+    "geo": {
+      "value": "49.119401, -122.6578649",
+      "status": "conflict",
+      "evidence": [
+        {
+          "quote": "{\"@type\": \"GeoCoordinates\", \"latitude\": 49.119401, \"longitude\": -122.6578649}",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "jsonld"
+        }
+      ],
+      "candidates": [
+        {
+          "value": "49.119401, -122.6578649",
+          "evidence": [
+            {
+              "quote": "{\"@type\": \"GeoCoordinates\", \"latitude\": 49.119401, \"longitude\": -122.6578649}",
+              "url": "https://darcybaileycounselling.com/about-us/",
+              "source": "jsonld"
+            }
+          ]
+        },
+        {
+          "value": "49.1008, -122.6604",
+          "evidence": [
+            {
+              "quote": "{\"@type\": \"GeoCoordinates\", \"latitude\": 49.1008, \"longitude\": -122.6604}",
+              "url": "https://darcybaileycounselling.com/",
+              "source": "jsonld"
+            }
+          ]
+        }
+      ],
+      "note": "The live site carries two different coordinates. The Google Business Profile pin is the one to match."
+    },
+    "map_url": {
+      "value": "https://maps.app.goo.gl/9XSJ3jDrWSiEznJY9",
+      "status": "found",
+      "evidence": [
+        { "quote": "\"hasMap\": \"https://maps.app.goo.gl/9XSJ3jDrWSiEznJY9\"", "url": "https://darcybaileycounselling.com/about-us/", "source": "jsonld" }
+      ]
+    },
+    "phone": {
+      "value": "604-533-9163",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Call 604-533-9163, fill out the contact form, or book a free 15-minute consultation online.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        { "quote": "tel:+16045339163", "url": "https://darcybaileycounselling.com/", "source": "link" },
+        { "quote": "\"telephone\": \"+1-604-533-9163\"", "url": "https://darcybaileycounselling.com/about-us/", "source": "jsonld" }
+      ]
+    },
+    "email": {
+      "value": "info@darcybaileycounselling.com",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "\"email\": \"info@darcybaileycounselling.com\"",
+          "url": "https://darcybaileycounselling.com/",
+          "source": "jsonld"
+        }
+      ],
+      "note": "It is in the current site schema but not shown on any page. Confirm it is the right public address."
+    },
+    "hours": {
+      "value": [
+        { "days": "Monday to Thursday", "opens": "9 AM", "closes": "8 PM" },
+        { "days": "Friday", "opens": "9 AM", "closes": "7 PM" },
+        { "days": "Saturday", "opens": "9 AM", "closes": "5 PM" },
+        { "days": "Sunday", "opens": "11 AM", "closes": "5 PM" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Office hours are Monday to Thursday 9 AM to 8 PM, Friday 9 AM to 7 PM, Saturday 9 AM to 5 PM, and Sunday 11 AM to 5 PM.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Each therapist sets their own schedule within those hours, so evening and weekend availability depends on who you see.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ],
+      "note": "The Rates page lists these as admin hours and says counsellor hours vary. Confirm these are also the hours clients can be seen in person."
+    },
+    "area_served": {
+      "value": [
+        { "name": "Langley" },
+        { "name": "Surrey" },
+        { "name": "Cloverdale" },
+        { "name": "South Surrey" },
+        { "name": "Aldergrove" },
+        { "name": "Abbotsford" },
+        { "name": "British Columbia" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Every service above is available by secure video to clients anywhere in BC.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "The Langley office at 20385 64 Avenue sits beside Costco, 5 to 15 minutes from Willoughby, Walnut Grove, Murrayville, and Cloverdale, with free parking.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "\"areaServed\": [{\"@type\": \"City\", \"name\": \"Langley\"}, {\"@type\": \"City\", \"name\": \"Surrey\"}, {\"@type\": \"City\", \"name\": \"Cloverdale\"}, {\"@type\": \"City\", \"name\": \"South Surrey\"}, {\"@type\": \"City\", \"name\": \"Aldergrove\"}, {\"@type\": \"City\", \"name\": \"Abbotsford\"}, {\"@type\": \"AdministrativeArea\", \"name\": \"British Columbia\"}]",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "jsonld"
+        }
+      ]
+    },
+    "languages": {
+      "value": [{ "name": "English" }, { "name": "Spanish" }],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Fourteen therapists cover children, teens, adults, couples, and families, with Spanish-speaking sessions available.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Isabel Ruiz, MCP, RCC. Children 5+, teens, adults, and parents, in English and Spanish.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "services": {
+      "value": [
+        {
+          "name": "Adult individual counselling",
+          "description": "One-on-one therapy for anxiety, depression, trauma, stress and burnout, grief, self-worth, perfectionism, and life transitions. Sessions are 50 minutes, in person in Langley or by video anywhere in BC, and the work goes past symptom management to the patterns underneath.",
+          "price": "$170 per session, or $175 with a senior therapist",
+          "url": ""
+        },
+        {
+          "name": "Counselling for children (ages 5 to 12)",
+          "description": "Child therapists on the team use play therapy, sand tray therapy, and art therapy, because children work things out through play before they can put them into words. The first appointment is a parent-only session so the therapist understands the situation before meeting the child.",
+          "price": "",
+          "url": ""
+        },
+        {
+          "name": "Counselling for teens (ages 13 and up)",
+          "description": "Therapy for school stress, anxiety, identity, social pressure, screen time, and family conflict. Teens choose in-person or virtual sessions, and what they say in session stays confidential within the limits of the law.",
+          "price": "",
+          "url": ""
+        },
+        {
+          "name": "Couples and marriage counselling",
+          "description": "Counselling for communication breakdowns, trust after infidelity, intimacy, and feeling like roommates. Seven therapists on the team are trained in the Gottman Method, and several in Emotion-Focused Therapy.",
+          "price": "$195 for 50 minutes, with 75-minute sessions available",
+          "url": ""
+        },
+        {
+          "name": "Family therapy and parent counselling",
+          "description": "Sessions for the whole family, blended families, co-parents after separation, and parents who want help with a child or teen without the child in the room.",
+          "price": "$195 for 50 minutes",
+          "url": ""
+        },
+        {
+          "name": "EMDR therapy",
+          "description": "Eye Movement Desensitization and Reprocessing for trauma, PTSD, phobias, and experiences that are over but still running. Six therapists on the team are trained in EMDR, including EMDRIA-trained clinicians. EMDR is available in person and virtually.",
+          "price": "",
+          "url": ""
+        },
+        {
+          "name": "Art therapy, play therapy, and sand tray therapy",
+          "description": "The practice has registered art therapists on staff (RCAT and BCATR credentials, and Darcy herself holds a Diploma in Art Therapy). These approaches work for clients of any age who cannot talk their way to the problem, and they are the main way the team works with young children.",
+          "price": "",
+          "url": ""
+        },
+        {
+          "name": "Perinatal mental health",
+          "description": "Counselling for pregnancy, postpartum, and the first years of parenthood, including postpartum anxiety and depression. Raelene Hurry, M.Ed, RCC, specializes in it.",
+          "price": "",
+          "url": ""
+        },
+        {
+          "name": "Online counselling across British Columbia",
+          "description": "Every service above is available by secure video to clients anywhere in BC. Same therapists, same fees, no commute. Many clients mix in-person and virtual sessions depending on the week.",
+          "price": "",
+          "url": ""
+        }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "One-on-one therapy for anxiety, depression, trauma, stress and burnout, grief, self-worth, perfectionism, and life transitions.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Child therapists on the team use play therapy, sand tray therapy, and art therapy, because children work things out through play before they can put them into words.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Therapy for school stress, anxiety, identity, social pressure, screen time, and family conflict.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Seven therapists on the team are trained in the Gottman Method, and several in Emotion-Focused Therapy, two of the most researched approaches for couples.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Six therapists on the team are trained in EMDR, including EMDRIA-trained clinicians.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Counselling for pregnancy, postpartum, and the first years of parenthood, including postpartum anxiety and depression. Raelene Hurry, M.Ed, RCC, specializes in it.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Every service above is available by secure video to clients anywhere in BC. Same therapists, same fees, no commute.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ],
+      "note": "The homepage also lists sex therapy and first responder support as focus areas; the draft folded them into couples counselling and the Who uses list."
+    },
+    "pricing": {
+      "value": [
+        { "name": "Free 15-minute consultation", "price": "Free", "notes": "Phone or video consultation with an available therapist before booking a first session" },
+        { "name": "Individual counselling, 50 minutes", "price": "$170", "notes": "CAD; GST question open" },
+        { "name": "Individual counselling with a senior therapist, 50 minutes", "price": "$175", "notes": "CAD" },
+        { "name": "Couples, marriage, or family counselling, 50 minutes", "price": "$195", "notes": "CAD" },
+        { "name": "Individual counselling with a senior therapist, 75 minutes", "price": "$262.50", "notes": "from the Jane booking page" },
+        { "name": "Couples counselling, 75 minutes", "price": "$292.50", "notes": "from the Jane booking page" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Individual counselling is $170 per 50-minute session, or $175 with a senior therapist. Couples, marriage, and family sessions are $195. A 15-minute consultation before you start is free.",
+          "url": "https://darcybaileycounselling.com/rates/",
+          "source": "page"
+        },
+        {
+          "quote": "75-minute sessions available (individual with senior therapist $262.50, couples $292.50)",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "{\"@type\": \"Offer\", \"name\": \"Individual counselling, 50 minutes\", \"price\": \"170\", \"priceCurrency\": \"CAD\"}",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "jsonld"
+        }
+      ],
+      "itemConflicts": [
+        {
+          "key": "Individual counselling, 50 minutes",
+          "on": ["price"],
+          "candidates": [
+            {
+              "value": [{ "name": "Individual counselling, 50 minutes", "price": "$170 Total", "notes": "" }],
+              "evidence": [
+                { "quote": "$170 Total", "url": "https://darcybaileycounselling.com/rates/", "source": "page" },
+                { "quote": "$170 Total", "url": "https://darcybaileycounselling.janeapp.com/", "source": "page" }
+              ]
+            },
+            {
+              "value": [{ "name": "Individual counselling, 50 minutes", "price": "$170 + GST", "notes": "" }],
+              "evidence": [{ "quote": "$170 + GST", "url": "https://darcybaileycounselling.com/faq/", "source": "page" }]
+            }
+          ]
+        },
+        {
+          "key": "Couples, marriage, or family counselling, 50 minutes",
+          "on": ["price"],
+          "candidates": [
+            {
+              "value": [{ "name": "Couples, marriage, or family counselling, 50 minutes", "price": "$195", "notes": "" }],
+              "evidence": [
+                {
+                  "quote": "Couples, marriage, and family sessions are $195.",
+                  "url": "https://darcybaileycounselling.com/rates/",
+                  "source": "page"
+                }
+              ]
+            },
+            {
+              "value": [{ "name": "Couples, marriage, or family counselling, 50 minutes", "price": "$185", "notes": "" }],
+              "evidence": [
+                {
+                  "quote": "couples counselling is $185 per session",
+                  "url": "https://darcybaileycounselling.com/affordable-therapy-in-langley/",
+                  "source": "page"
+                },
+                {
+                  "quote": "couples sessions at $185",
+                  "url": "https://darcybaileycounselling.com/how-much-does-therapy-cost-in-bc/",
+                  "source": "page"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "The FAQ page says $170 + GST; the Rates page and the Jane booking page say $170 Total. Two blog posts still say $185 for couples."
+    },
+    "price_range": {
+      "value": "$170 to $195 per 50-minute session",
+      "status": "found",
+      "evidence": [
+        { "quote": "\"priceRange\": \"$170 to $195 per 50-minute session\"", "url": "https://darcybaileycounselling.com/about-us/", "source": "jsonld" },
+        {
+          "quote": "Individual counselling is $170 per 50-minute session, or $175 with a senior therapist. Couples, marriage, and family sessions are $195.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "contract_terms": {
+      "value": "None. Pay per session, credit card charged on the day. 48-hour cancellation policy; one late cancellation for illness per 90 days without charge",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "None. Pay per session, credit card charged on the day. 48-hour cancellation policy; one late cancellation for illness per 90 days without charge",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "free_offer": {
+      "value": "Free 15-minute consultation by phone or video with an available therapist",
+      "status": "found",
+      "evidence": [
+        { "quote": "A 15-minute consultation before you start is free.", "url": "https://darcybaileycounselling.com/about-us/", "source": "page" },
+        {
+          "quote": "book a free 15-minute consultation by phone or video with an available therapist through the online booking system",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "differentiators": {
+      "value": [
+        {
+          "claim": "A team of 14 therapists, matched to you by a person",
+          "detail": "A client care team talks to you first and matches you with a therapist based on what you are dealing with, your age, and your schedule, and you can switch if the fit is wrong."
+        },
+        {
+          "claim": "Pay per session, not per subscription",
+          "detail": "Online platforms like BetterHelp bill a recurring subscription whether or not you use it that week. Darcy Bailey & Associates charges per session, with a free 15-minute consultation first."
+        },
+        {
+          "claim": "Registered therapists your benefits plan recognizes",
+          "detail": "Thirteen therapists are Registered Clinical Counsellors (RCC) and one is a Registered Social Worker (RSW), the two designations most BC extended health plans require for reimbursement."
+        },
+        {
+          "claim": "Evening and weekend hours, in person or online",
+          "detail": "The office is open until 8 PM Monday to Thursday, 7 PM Friday, 5 PM Saturday, and Sunday afternoons. Virtual sessions cover the rest of BC."
+        },
+        {
+          "claim": "Specialized training, not just talk",
+          "detail": "Six therapists are trained in EMDR, seven in the Gottman Method for couples, and four are registered or diploma-trained art therapists."
+        },
+        {
+          "claim": "A track record people vote for",
+          "detail": "Over 70 percent of clients come from referrals by past clients, physicians, schools, and other therapists. Canadian Choice Award 2024 and 2025, Langley Advance Times Readers' Choice Best of the Best 2024, Best in Langley 2025, Three Best Rated 2024."
+        }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Here, a client care team talks to you first and matches you with a therapist based on what you are dealing with, your age, and your schedule, and you can switch if the fit is wrong.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Online platforms like BetterHelp bill a recurring subscription whether or not you use it that week.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Thirteen therapists are Registered Clinical Counsellors (RCC) and one is a Registered Social Worker (RSW), the two designations most BC extended health plans require for reimbursement.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Six therapists are trained in EMDR, seven in the Gottman Method for couples, and four are registered or diploma-trained art therapists.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "competitors": {
+      "value": [
+        { "name": "Online therapy subscriptions (BetterHelp, Talkspace)" },
+        { "name": "Solo private-practice counsellors in Langley and Surrey" },
+        { "name": "Registered psychologists" },
+        { "name": "Community agencies with waitlists" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Online therapy subscriptions (BetterHelp, Talkspace), solo private-practice counsellors in Langley and Surrey, registered psychologists, and community agencies with waitlists",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "awards": {
+      "value": [
+        { "name": "Canadian Choice Award Winner, Mental Health Services, Langley", "issuer": "Canadian Choice Awards", "year": "2024" },
+        { "name": "Canadian Choice Award Winner", "issuer": "Canadian Choice Awards", "year": "2025" },
+        { "name": "Readers' Choice Awards, Best of the Best", "issuer": "Langley Advance Times", "year": "2024" },
+        { "name": "Best in Langley", "issuer": "Langley Advance Times", "year": "2025" },
+        { "name": "Three Best Rated, Marriage Counselling, Langley", "issuer": "Three Best Rated", "year": "2024" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Awards: Canadian Choice Award Winner, Mental Health Services, Langley (2024 and 2025). Langley Advance Times Readers' Choice Awards, Best of the Best (2024) and Best in Langley (2025). Three Best Rated, Marriage Counselling, Langley (2024).",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "canadian-choice-award-winner-2024.png",
+          "url": "https://darcybaileycounselling.com/",
+          "source": "image"
+        },
+        {
+          "quote": "three-best-rated-marriage-counselling-langley-2024.png",
+          "url": "https://darcybaileycounselling.com/",
+          "source": "image"
+        }
+      ],
+      "note": "The 2025 Canadian Choice category is not readable on the badge. Any 2026 awards?"
+    },
+    "memberships": {
+      "value": [
+        { "name": "BC Association of Clinical Counsellors" },
+        { "name": "BC College of Social Workers" },
+        { "name": "BC Association of Social Workers" },
+        { "name": "BC Play Therapy" },
+        { "name": "CounsellingBC" },
+        { "name": "Theravive" },
+        { "name": "Langley Chamber of Commerce" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Memberships and affiliations shown on the site: BC Association of Clinical Counsellors, BC College of Social Workers, BC Association of Social Workers, BC Play Therapy, CounsellingBC, Theravive, Langley Chamber of Commerce",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ],
+      "note": "Some are regulators of individual therapists and some are directory listings. Confirm which to keep on the page."
+    },
+    "notable_clients": {
+      "value": null,
+      "status": "missing",
+      "evidence": [],
+      "note": "Counselling clients are confidential and not named. Named referral partners would be the next best thing."
+    },
+    "customers_served": {
+      "value": "Thousands of clients",
+      "status": "found",
+      "evidence": [
+        { "quote": "has worked with thousands of clients in that time", "url": "https://darcybaileycounselling.com/about-us/", "source": "page" }
+      ],
+      "note": "A number is stronger than thousands."
+    },
+    "projects_delivered": { "value": null, "status": "missing", "evidence": [], "note": "Jane can report the number of sessions delivered." },
+    "track_record": {
+      "value": [{ "claim": "Over 70 percent of clients come from word of mouth" }],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Most new clients arrive because someone they trust sent them. Over 70 percent of clients come from word of mouth.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "founder_quote": { "value": null, "status": "missing", "evidence": [] },
+    "customer_segments": {
+      "value": [
+        { "segment": "Adults in Langley, Surrey, and the Fraser Valley dealing with anxiety, depression, burnout, trauma, or a major life change, who want a registered therapist their extended health plan will reimburse." },
+        { "segment": "Couples and married partners who want to fix communication, rebuild trust, or reconnect, with a counsellor trained in the Gottman Method or Emotion-Focused Therapy." },
+        { "segment": "Parents of children ages 5 to 12 who are anxious, acting out, or struggling at school, and who want a therapist trained in play, sand tray, or art therapy." },
+        { "segment": "Teens 13 and up, and the parents who bring them, dealing with school pressure, anxiety, identity, social media, or family conflict." },
+        { "segment": "Families, blended families, and separated co-parents who need help communicating and getting the house calm again." },
+        { "segment": "Pregnant and new parents dealing with postpartum anxiety, depression, or the shock of new parenthood." },
+        { "segment": "First responders and frontline workers carrying cumulative trauma and burnout." },
+        { "segment": "Children, teens, and adults with ADHD or autism who want neurodivergent-affirming support rather than a therapist who treats it as a problem to fix." },
+        { "segment": "Clients with FNHA, CVAP, MCFD, or Autism Funding who need a practice that accepts it." },
+        { "segment": "Anyone in British Columbia who wants virtual sessions, and Spanish speakers who want therapy in Spanish." }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Adults in Langley, Surrey, and the Fraser Valley dealing with anxiety, depression, burnout, trauma, or a major life change, who want a registered therapist their extended health plan will reimburse.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "First responders and frontline workers carrying cumulative trauma and burnout.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Clients with FNHA, CVAP, MCFD, or Autism Funding who need a practice that accepts it.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "founders": {
+      "value": [
+        {
+          "name": "Darcy Bailey",
+          "title": "Founder, Owner, and Clinical Director",
+          "credentials": "MSW, RSW, RCC, DipAT",
+          "bio": "Darcy has worked as a therapist for over 25 years and has lived in Langley for more than 25 years, where she raised her family. She holds a Master of Social Work, is registered as both a social worker and a clinical counsellor, and trained in art therapy around 2006. She is a published author and has walked through anxiety, trauma, and healing herself, which shapes how she works and how she built the team. She now runs the practice as clinical director and takes a limited number of new clients.",
+          "url": "https://darcybaileycounselling.com/darcy-bailey/",
+          "linkedin": "",
+          "youtube": "",
+          "x": "",
+          "facebook": "",
+          "instagram": "",
+          "website": ""
+        }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Darcy has worked as a therapist for over 25 years and has lived in Langley for more than 25 years, where she raised her family.",
+          "url": "https://darcybaileycounselling.com/darcy-bailey/",
+          "source": "page"
+        },
+        {
+          "quote": "She holds a Master of Social Work, is registered as both a social worker and a clinical counsellor, and trained in art therapy around 2006.",
+          "url": "https://darcybaileycounselling.com/darcy-bailey/",
+          "source": "page"
+        },
+        {
+          "quote": "{\"@type\": \"Person\", \"name\": \"Darcy Bailey\", \"honorificSuffix\": \"MSW, RSW, RCC, DipAT\", \"jobTitle\": \"Founder, Owner, and Clinical Director\", \"url\": \"https://darcybaileycounselling.com/darcy-bailey/\"}",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "jsonld"
+        }
+      ],
+      "itemConflicts": [
+        {
+          "key": "Darcy Bailey",
+          "on": ["title"],
+          "candidates": [
+            {
+              "value": [{ "name": "Darcy Bailey", "title": "Founder, Therapist, Author & Clinical Director" }],
+              "evidence": [
+                {
+                  "quote": "Founder, Therapist, Author & Clinical Director",
+                  "url": "https://darcybaileycounselling.com/about-us/",
+                  "source": "page"
+                }
+              ]
+            },
+            {
+              "value": [{ "name": "Darcy Bailey", "title": "Owner & Clinical Director" }],
+              "evidence": [
+                { "quote": "Owner & Clinical Director", "url": "https://darcybaileycounselling.com/our-team/", "source": "page" }
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "The site calls her a published author and never names the book. Her LinkedIn and other professional profiles are not on the site."
+    },
+    "origin_story": {
+      "value": "The dragonfly logo came from a summer afternoon around 2006, during her art therapy training, when her young daughter spent what felt like a long time chasing and being chased by a dragonfly in the yard. Darcy later learned the dragonfly is a symbol of transformation and a messenger from departed souls, and her mother had died years before her daughter was born. She sketched the moment in pencil crayon and it became the logo.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "The dragonfly logo came from a summer afternoon around 2006, during her art therapy training, when her young daughter spent what felt like a long time chasing and being chased by a dragonfly in the yard.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "She sketched the moment in pencil crayon and it became the logo.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ],
+      "note": "The year the practice opened and whether it started as a solo practice are not on the site."
+    },
+    "team_members": {
+      "value": [
+        { "name": "Nancy Orlikow", "role": "Senior Therapist, Registered Clinical Counsellor", "credentials": "MA, RCC, BCATR", "specialties": "Children 5+, teens, adults, and families. EMDR, somatic and parts work, art therapy, attachment-focused and trauma-informed therapy.", "url": "https://darcybaileycounselling.com/nancy-orlikow/" },
+        { "name": "Trish Rapske", "role": "Senior Therapist, Registered Clinical Counsellor", "credentials": "MAIS, DVATI, RCC, RCAT", "specialties": "Teens, adults, couples, and families. Emotion-Focused Therapy, art therapy, CBT, Gottman Method.", "url": "https://darcybaileycounselling.com/trish-rapske/" },
+        { "name": "Swetha Ranasuriya", "role": "Registered Clinical Counsellor", "credentials": "MA, DVATI, RCC, RCAT", "specialties": "Children 5+, teens, adults, and families. EMDR and art therapy.", "url": "https://darcybaileycounselling.com/swetha-ranasuriya/" },
+        { "name": "Pal Manhas", "role": "Registered Clinical Counsellor", "credentials": "M.Ed, RCC, CCPT", "specialties": "Teens, adults, couples, and families. Gottman Method Levels 1 to 3, certified sex therapy informed practice, EMDR.", "url": "https://darcybaileycounselling.com/palvinder-manhas/" },
+        { "name": "Aman Bains", "role": "Registered Clinical Counsellor", "credentials": "MA, RCC", "specialties": "Teens, adults, couples, and families. EMDR, CBT, narrative therapy, Gottman Level 1.", "url": "https://darcybaileycounselling.com/aman-bains/" },
+        { "name": "Julie Sprague", "role": "Registered Clinical Counsellor", "credentials": "MACP, RCC", "specialties": "Teens, adults, couples, and families. CBT, DBT, Emotion-Focused Therapy, ACT, IFS-informed, Gottman Method.", "url": "https://darcybaileycounselling.com/julie-sprague/" },
+        { "name": "Michelle Boucher", "role": "Registered Clinical Counsellor", "credentials": "MC, RCC", "specialties": "Teens, adults, parents, and first responders. EMDR, trauma-focused therapy, CBT, EFT, expressive play therapy.", "url": "https://darcybaileycounselling.com/michelle-boucher/" },
+        { "name": "Raelene Hurry", "role": "Registered Clinical Counsellor", "credentials": "M.Ed, RCC", "specialties": "Children 5+, teens, adults, and perinatal mental health. CBT, DBT, Emotion-Focused Individual Therapy, polyvagal-informed and somatic practice, sand tray.", "url": "https://darcybaileycounselling.com/raelene-hurry/" },
+        { "name": "Rhonda MacWilliams", "role": "Registered Clinical Counsellor", "credentials": "M.Ed, RCC", "specialties": "Children 5+, teens, adults, couples, and families. CBT, DBT, solution-focused therapy, EFT.", "url": "https://darcybaileycounselling.com/rhonda-macwilliams/" },
+        { "name": "Noah Molema", "role": "Registered Clinical Counsellor", "credentials": "BA, MACP, RCC", "specialties": "Teens 13+, adults, and couples. CBT, Emotion-Focused Therapy, Gottman Level 1.", "url": "https://darcybaileycounselling.com/noah-molema/" },
+        { "name": "Isabel Ruiz", "role": "Registered Clinical Counsellor", "credentials": "MCP, RCC", "specialties": "Children 5+, teens, adults, and parents, in English and Spanish. EMDR (EMDRIA trained), IFS, CBT, somatic therapy, neuro-affirming practice, sand tray and play therapy, Gottman Level 1.", "url": "https://darcybaileycounselling.com/isabel-ruiz/" },
+        { "name": "Denise Wynne", "role": "Registered Social Worker", "credentials": "MSW, RSW", "specialties": "Children 5+, teens, adults, and families. Sand tray therapy.", "url": "https://darcybaileycounselling.com/denise-wynne/" },
+        { "name": "Shannon McDonald", "role": "Registered Clinical Counsellor", "credentials": "BA, MEd, RCC", "specialties": "Children 5+, teens, and adults. CBT, DBT, art and play-based therapy, trauma-informed and mindfulness practice.", "url": "https://darcybaileycounselling.com/shannon-mcdonald/" },
+        { "name": "Katie Freiheit", "role": "Registered Clinical Counsellor", "credentials": "MA, RCC", "specialties": "Children 5+, teens, adults, and families. Adlerian, Satir family systems, Gestalt, Gottman Method, somatic awareness.", "url": "https://darcybaileycounselling.com/katie-freiheit/" },
+        { "name": "Wendie Holbrook", "role": "Client Care Team Lead", "credentials": "", "specialties": "Leads the client care team and is usually the first person you talk to.", "url": "" },
+        { "name": "Lindsay Hardman", "role": "Client Care Team", "credentials": "", "specialties": "Scheduling and matching.", "url": "" },
+        { "name": "Simone Kumar", "role": "Client Care Team", "credentials": "", "specialties": "Scheduling and matching.", "url": "" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Nancy Orlikow, MA, RCC, BCATR. Senior therapist. Children 5+, teens, adults, and families. EMDR, somatic and parts work, art therapy, attachment-focused and trauma-informed therapy.",
+          "url": "https://darcybaileycounselling.com/our-team/",
+          "source": "page"
+        },
+        {
+          "quote": "Trish Rapske, MAIS, DVATI, RCC, RCAT. Senior therapist. Teens, adults, couples, and families. Emotion-Focused Therapy, art therapy, CBT, Gottman Method.",
+          "url": "https://darcybaileycounselling.com/our-team/",
+          "source": "page"
+        },
+        {
+          "quote": "Isabel Ruiz, MCP, RCC. Children 5+, teens, adults, and parents, in English and Spanish. EMDR (EMDRIA trained), IFS, CBT, somatic therapy, neuro-affirming practice, sand tray and play therapy, Gottman Level 1.",
+          "url": "https://darcybaileycounselling.com/isabel-ruiz/",
+          "source": "page"
+        },
+        {
+          "quote": "Wendie Holbrook leads the client care team and is usually the first person you talk to. Lindsay Hardman and Simone Kumar handle scheduling and matching.",
+          "url": "https://darcybaileycounselling.com/our-team/",
+          "source": "page"
+        }
+      ],
+      "itemConflicts": [
+        {
+          "key": "Swetha Ranasuriya",
+          "on": ["name"],
+          "candidates": [
+            {
+              "value": [{ "name": "Swetha Ranasuriya", "role": "Registered Clinical Counsellor" }],
+              "evidence": [
+                { "quote": "Swetha Ranasuriya", "url": "https://darcybaileycounselling.com/swetha-ranasuriya/", "source": "page" },
+                { "quote": "Swetha Ranasuriya", "url": "https://darcybaileycounselling.janeapp.com/", "source": "page" }
+              ]
+            },
+            {
+              "value": [{ "name": "Swetha Ranasuirya", "role": "Registered Clinical Counsellor" }],
+              "evidence": [{ "quote": "Swetha Ranasuirya", "url": "https://darcybaileycounselling.com/our-team/", "source": "page" }]
+            }
+          ]
+        },
+        {
+          "key": "Pal Manhas",
+          "on": ["name"],
+          "candidates": [
+            {
+              "value": [{ "name": "Pal Manhas", "role": "Registered Clinical Counsellor" }],
+              "evidence": [{ "quote": "Pal Manhas", "url": "https://darcybaileycounselling.com/palvinder-manhas/", "source": "page" }]
+            },
+            {
+              "value": [{ "name": "Palvinder Manhas", "role": "Registered Clinical Counsellor" }],
+              "evidence": [{ "quote": "Palvinder Manhas", "url": "https://darcybaileycounselling.com/our-team/", "source": "page" }]
+            },
+            {
+              "value": [{ "name": "Palvinder Manhas-Bains", "role": "Registered Clinical Counsellor" }],
+              "evidence": [{ "quote": "Palvinder Manhas-Bains", "url": "https://darcybaileycounselling.janeapp.com/", "source": "page" }]
+            }
+          ]
+        },
+        {
+          "key": "Denise Wynne",
+          "on": ["role", "credentials"],
+          "candidates": [
+            {
+              "value": [{ "name": "Denise Wynne", "role": "Registered Social Worker", "credentials": "MSW, RSW" }],
+              "evidence": [{ "quote": "Denise Wynne, MSW, RSW", "url": "https://darcybaileycounselling.com/our-team/", "source": "page" }]
+            },
+            {
+              "value": [{ "name": "Denise Wynne", "role": "Registered Clinical Counsellor", "credentials": "MSW, RSW" }],
+              "evidence": [
+                {
+                  "quote": "Denise Wynne, Registered Clinical Counsellor, MSW, RSW",
+                  "url": "https://darcybaileycounselling.com/denise-wynne/",
+                  "source": "page"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "Wendie Holbrook",
+          "on": ["role"],
+          "candidates": [
+            {
+              "value": [{ "name": "Wendie Holbrook", "role": "Client Care Team Lead" }],
+              "evidence": [
+                { "quote": "leads our Client Care Team", "url": "https://darcybaileycounselling.com/our-team/", "source": "page" }
+              ]
+            },
+            {
+              "value": [{ "name": "Wendie Holbrook", "role": "Client Care Manager" }],
+              "evidence": [{ "quote": "Client Care Manager", "url": "https://darcybaileycounselling.com/faq/", "source": "page" }]
+            }
+          ]
+        }
+      ],
+      "note": "Melanie Gaudet (RN, MACP, RCC), Maria Pais-Martins (M.Ed., RCC) and Jayne Blemings (MA, RCC) have live profile pages but are not on the team page or in the booking system, so they are left off."
+    },
+    "team_size": {
+      "value": "14 registered therapists, one clinical director, and three client care staff (18 people)",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Fourteen therapists, one clinical director, and three client care staff, all based in Langley, BC.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "\"numberOfEmployees\": {\"@type\": \"QuantitativeValue\", \"value\": 18}",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "jsonld"
+        }
+      ]
+    },
+    "team_composition": {
+      "value": "Fourteen therapists, one clinical director, and three client care staff, all based in Langley, BC. Thirteen therapists are Registered Clinical Counsellors and one is a Registered Social Worker.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Fourteen therapists, one clinical director, and three client care staff, all based in Langley, BC. Thirteen therapists are Registered Clinical Counsellors and one is a Registered Social Worker.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ],
+      "note": "The schema lists the associates under employee. If they are contractors, that property changes."
+    },
+    "communication_channels": {
+      "value": [
+        { "channel": "Phone 604-533-9163" },
+        { "channel": "Contact form (reply within three business days)" },
+        { "channel": "Online booking and client portal through Jane" },
+        { "channel": "In person at the Langley office" },
+        { "channel": "Secure video" }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Phone 604-533-9163, contact form (reply within three business days), online booking and client portal through Jane",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "In-person at the Langley office or secure video",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "response_time": {
+      "value": "Contact form replies within three business days",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "fill out the contact form and client care will reply within three business days",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "who_you_work_with": {
+      "value": "The client care team until you are matched, then the same therapist every session",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Who you work with: the client care team until you are matched, then the same therapist every session.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "turnaround": {
+      "value": "Sessions are 50 minutes, with 75-minute sessions available for a higher fee",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Sessions are 50 minutes, with 75-minute sessions available for a higher fee.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ],
+      "note": "The typical wait for a first appointment is not on the site."
+    },
+    "onboarding": {
+      "value": "Call 604-533-9163 and the client care team will set up your first appointment and match you with a therapist, or book a free 15-minute consultation by phone or video with an available therapist through the online booking system, or fill out the contact form and client care will reply within three business days. New clients can also book a first session directly online. After the first appointment, you book your own sessions through the client portal. For children ages 5 to 12, the first booking is a parent-only session. No referral is needed for anyone, though some benefits plans ask for one.",
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Getting started: call 604-533-9163 and the client care team will set up your first appointment and match you with a therapist, or book a free 15-minute consultation by phone or video with an available therapist through the online booking system, or fill out the contact form and client care will reply within three business days.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "For children ages 5 to 12, the first booking is a parent-only session. No referral is needed for anyone, though some benefits plans ask for one, so check your plan.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ]
+    },
+    "policies": {
+      "value": [
+        { "name": "Cancellation", "detail": "Cancellations need 48 hours' notice, or the full session fee is charged. One late cancellation for illness is allowed every 90 days without charge." },
+        { "name": "Payment", "detail": "A credit card is required to book and is charged on the day of the session. You receive an official receipt to submit to your extended health plan; the practice does not bill insurers directly." },
+        { "name": "Confidentiality", "detail": "Records are kept in an encrypted system and only your therapist has access to your file. The exceptions are the ones required by law: a court subpoena, a risk of harm to yourself or someone else, or abuse or neglect of a child or vulnerable adult." },
+        { "name": "Consent for children", "detail": "If parents are separated or divorced, both must consent to the child's counselling." },
+        { "name": "Funding programs accepted", "detail": "First Nations Health Authority funding, Crime Victim Assistance Program clients (who pay the difference between the CVAP rate and the session fee), Autism Funding, and approved Ministry of Children and Family Development funding. The paperwork has to be in place before the first session." },
+        { "name": "Not provided", "detail": "The practice does not provide assessments, court reports, or custody recommendations." }
+      ],
+      "status": "found",
+      "evidence": [
+        {
+          "quote": "Cancellations need 48 hours' notice, or the full session fee is charged. One late cancellation for illness is allowed every 90 days without charge.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "A credit card is required to book and is charged on the day of the session. You receive an official receipt to submit to your extended health plan; the practice does not bill insurers directly.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "Records are kept in an encrypted system and only your therapist can see your file.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        },
+        {
+          "quote": "The practice does not provide assessments, court reports, or custody recommendations.",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "page"
+        }
+      ],
+      "note": "The Rates page says CVAP is provided by a few therapists. Adjust if any funding program is therapist-specific."
+    },
+    "existing_faqs": {
+      "value": [
+        { "question": "How much does counselling cost at Darcy Bailey & Associates?", "answer": "Individual counselling is $170 per 50-minute session, or $175 with a senior therapist. Couples, marriage, and family sessions are $195. A 15-minute consultation before you start is free.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "Is counselling covered by MSP or extended health benefits?", "answer": "BC MSP does not cover private counselling. Most extended health plans reimburse sessions with a Registered Clinical Counsellor or Registered Social Worker, which covers every therapist at the practice, so check your plan for the annual maximum and the credentials it requires. You pay at the time of the session and submit the receipt yourself; the practice does not bill insurers directly.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "Do you accept funding programs?", "answer": "Yes. The practice accepts First Nations Health Authority funding, Crime Victim Assistance Program clients (who pay the difference between the CVAP rate and the session fee), Autism Funding, and approved Ministry of Children and Family Development funding. The paperwork has to be in place before the first session.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "Do I need a referral?", "answer": "No. You can book directly by phone, through the contact form, or online. Some benefits plans require a doctor's referral for reimbursement, so check yours.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "Do you offer online counselling?", "answer": "Yes. Every therapist offers secure video sessions to clients anywhere in British Columbia at the same fee as in-person sessions. In-person sessions are at the Langley office.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "What are your hours?", "answer": "Office hours are Monday to Thursday 9 AM to 8 PM, Friday 9 AM to 7 PM, Saturday 9 AM to 5 PM, and Sunday 11 AM to 5 PM. Each therapist sets their own schedule within those hours, so evening and weekend availability depends on who you see.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "How do I book a first appointment?", "answer": "Call 604-533-9163, fill out the contact form, or book a free 15-minute consultation online. The client care team matches you with a therapist and sets up the first session, and after that you book through the client portal. A credit card is required to book.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "How does counselling for a child work?", "answer": "For children ages 5 to 12, the first appointment is with the parent or caregiver only. The therapist then works with the child, usually through play, sand tray, or art therapy, and checks in with parents along the way. If parents are separated or divorced, both must consent to the child's counselling.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "Do you have psychologists on staff?", "answer": "No. The therapists are Registered Clinical Counsellors and Registered Social Workers, who provide therapy but not formal diagnoses or psychological testing. If you need an assessment or diagnosis, a registered psychologist is the right referral.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "What is your cancellation policy?", "answer": "Cancellations need 48 hours' notice, or the full session fee is charged. One late cancellation for illness is allowed every 90 days without charge.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "Is what I say in session confidential?", "answer": "Yes. Records are kept in an encrypted system and only your therapist has access to your file. The exceptions are the ones required by law: a court subpoena, a risk of harm to yourself or someone else, or abuse or neglect of a child or vulnerable adult.", "url": "https://darcybaileycounselling.com/faq/" },
+        { "question": "Who is behind Darcy Bailey & Associates Counselling?", "answer": "Darcy Bailey, MSW, RSW, RCC, DipAT, founded the practice and runs it as owner and clinical director. A team of 14 registered therapists and three client care staff work out of the Langley office and online across BC.", "url": "https://darcybaileycounselling.com/about-us/" }
+      ],
+      "status": "found",
+      "evidence": [
+        { "quote": "How much does counselling cost at Darcy Bailey & Associates?", "url": "https://darcybaileycounselling.com/faq/", "source": "page" },
+        { "quote": "Is counselling covered by MSP or extended health benefits?", "url": "https://darcybaileycounselling.com/faq/", "source": "page" },
+        { "quote": "What is your cancellation policy?", "url": "https://darcybaileycounselling.com/faq/", "source": "page" }
+      ]
+    },
+    "social_profiles": {
+      "value": [
+        { "platform": "facebook", "url": "https://www.facebook.com/darcybaileycounselling", "owner": "business" },
+        { "platform": "instagram", "url": "https://www.instagram.com/dbailey_associatescounselling/", "owner": "business" }
+      ],
+      "status": "found",
+      "evidence": [
+        { "quote": "https://www.facebook.com/darcybaileycounselling", "url": "https://darcybaileycounselling.com/", "source": "link" },
+        { "quote": "https://www.instagram.com/dbailey_associatescounselling/", "url": "https://darcybaileycounselling.com/", "source": "link" },
+        {
+          "quote": "\"sameAs\": [\"https://www.facebook.com/darcybaileycounselling\", \"https://www.instagram.com/dbailey_associatescounselling/\"]",
+          "url": "https://darcybaileycounselling.com/about-us/",
+          "source": "jsonld"
+        }
+      ],
+      "note": "Need: LinkedIn company page, YouTube channel (the team page embeds a video but the channel is not named), Google Business Profile link, TikTok if any, Psychology Today listing if any."
+    }
+  }
+}
