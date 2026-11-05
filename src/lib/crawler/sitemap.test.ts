@@ -72,7 +72,7 @@ describe("discoverSitemapUrls", () => {
   it("walks the index, reads page sitemaps first, skips post and category sitemaps, keeps same-site html only", async () => {
     const result = await discoverSitemapUrls("https://example.com", [], { ...opts, fetchImpl: stubFetch(routes) });
     expect(result.sitemapsRead).toEqual(["https://example.com/sitemap.xml", "https://example.com/page-sitemap.xml"]);
-    expect(result.urls).toEqual(["https://example.com/", "https://example.com/about", "https://example.com/contact"]);
+    expect(result.urls).toEqual(["https://example.com/", "https://example.com/about/", "https://example.com/contact/"]);
   });
 
   it("uses the robots sitemaps first", async () => {
@@ -90,7 +90,7 @@ describe("discoverSitemapUrls", () => {
       ...opts,
       fetchImpl: stubFetch({ "https://example.com/sitemap.xml": index, "https://example.com/post-sitemap.xml": POSTS }),
     });
-    expect(result.urls).toEqual(["https://example.com/blog/post-one", "https://example.com/blog/post-two"]);
+    expect(result.urls).toEqual(["https://example.com/blog/post-one/", "https://example.com/blog/post-two/"]);
   });
 
   it("respects maxSitemaps", async () => {

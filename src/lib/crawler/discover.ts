@@ -63,7 +63,7 @@ export async function discoverSite(siteUrl: string, opts: DiscoverOptions): Prom
 
   // The home page's own links (navigation, footer, body) are the best signal for which pages
   // matter, and they carry link text. Sitemaps often list only products, posts, or profiles.
-  const fromHome = robots.allowed(home) ? await homeLinks(home, opts) : [];
+  const fromHome = robots.allowed(home) ? await homeLinks(home, { ...opts, allowed: robots.allowed }) : [];
 
   const sitemap = await discoverSitemapUrls(origin, robots.sitemaps, {
     userAgent: opts.userAgent,
@@ -149,6 +149,7 @@ async function probeCommonPaths(
           fetchImpl: opts.fetchImpl,
           resolveHost: opts.resolveHost,
           deadline: opts.deadline,
+          allowed,
         });
         const landed = r.ok ? normalizeUrl(r.finalUrl) : null;
         const isHtml = /html/i.test(r.contentType ?? "");
@@ -166,7 +167,7 @@ async function probeCommonPaths(
 const HOME_MAX_BYTES = 1_500_000;
 
 /** The internal links on the home page, with their text. Empty when the page cannot be read. */
-async function homeLinks(home: string, opts: DiscoverOptions): Promise<UrlCandidate[]> {
+async function homeLinks(home: string, opts: DiscoverOptions & { allowed: (url: string) => boolean }): Promise<UrlCandidate[]> {
   const r = await fetchPage(home, {
     userAgent: opts.userAgent,
     timeoutMs: opts.timeoutMs,
@@ -174,6 +175,7 @@ async function homeLinks(home: string, opts: DiscoverOptions): Promise<UrlCandid
     fetchImpl: opts.fetchImpl,
     resolveHost: opts.resolveHost,
     deadline: opts.deadline,
+    allowed: opts.allowed,
   });
   if (!r.ok || !r.html) return [];
   try {
@@ -226,7 +228,7 @@ export function addDiscoveredLinks(
 
   const candidates: UrlCandidate[] = [];
   for (const link of links) {
-    const n = normalizeUrl(link.url, opts.home);
+    const n = normalizeUrl(link.url, opts.home, { keepTrailingSlash: true });
     if (!n || !isSameSite(n, opts.home) || !looksLikeHtmlPath(n)) continue;
     const key = urlKey(n);
     if (!key || known.has(key)) continue;

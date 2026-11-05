@@ -385,6 +385,9 @@ async function discoverStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRu
 // fetch
 // ---------------------------------------------------------------------------
 
+/** The error recorded on a page skipped because the run's text budget ran out. */
+const TEXT_BUDGET = "text budget";
+
 type Prepared = {
   entry: RankedUrl;
   pageId: string;
@@ -417,16 +420,16 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
   let log = run.log;
   let budgetWarned = false;
 
-  // Links found on pages are only followed when there was no sitemap; robots is re-read from the run.
-  let allowed: ((url: string) => boolean) | undefined;
-  if (!usedSitemap) {
-    try {
-      const raw = robotsRecordOf(run.robots).raw ?? null;
-      allowed = parseRobots(raw, new URL(homeUrl).origin, config.crawl.userAgent).allowed;
-    } catch {
-      allowed = undefined;
-    }
+  // robots.txt as read at discovery, re-read from the run: every fetch and every redirect hop is checked.
+  let robotsAllowed: ((url: string) => boolean) | undefined;
+  try {
+    const raw = robotsRecordOf(run.robots).raw ?? null;
+    robotsAllowed = parseRobots(raw, new URL(homeUrl).origin, config.crawl.userAgent).allowed;
+  } catch {
+    robotsAllowed = undefined;
   }
+  // Links found on pages are only followed when there was no sitemap.
+  const allowed = usedSitemap ? undefined : robotsAllowed;
 
   const fetchOpts = {
     userAgent: config.crawl.userAgent,
@@ -434,6 +437,7 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
     maxBytes: config.crawl.maxHtmlBytes,
     // Leaves time for the uploads and writes after the last batch.
     deadline: ctx.deadline - config.crawl.writeReserveMs,
+    ...(robotsAllowed ? { allowed: robotsAllowed } : {}),
   };
 
   // A site that asks for a Crawl-delay is read one page at a time with that pause between pages.
@@ -461,6 +465,20 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
     const results = await Promise.all(batch.map((entry) => fetchPage(entry.url, fetchOpts)));
     const detections: PlatformDetection[] = [];
 
+    // A page that redirects to another page of this run ("/about" to "/about-us/") is read once,
+    // under the address it lands on, unless that page could not be read.
+    const readInBatch = new Set(batch.filter((_, i) => results[i].ok).map((entry) => pageKey(entry.url)));
+    const sameAs = (entry: RankedUrl, landedUrl: string): string | null => {
+      const landedKey = pageKey(landedUrl);
+      if (landedKey === pageKey(entry.url)) return null;
+      const twin = rowsByKey.get(landedKey);
+      if (!twin) return null;
+      if (twin.status === "fetched" || twin.status === "extracted") return twin.url;
+      if (twin.status !== "queued") return null;
+      const inBatch = batch.some((e) => pageKey(e.url) === landedKey);
+      return !inBatch || readInBatch.has(landedKey) ? twin.url : null;
+    };
+
     // Clean each page and apply the text budget, in rank order.
     const prepared: Prepared[] = batch.map((entry, i) => {
       const result = results[i];
@@ -469,12 +487,14 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
         return { entry, pageId, result, cleaned: null, problem: { status: "failed", error: result.error ?? "fetch failed" } };
       }
       const pageUrl = result.finalUrl || entry.url;
+      const twin = sameAs(entry, pageUrl);
+      if (twin) return { entry, pageId, result, cleaned: null, problem: { status: "skipped", error: `same page as ${twin}` } };
       try {
         const cleaned = cleanPage(result.html, pageUrl);
         detections.push(detectPlatform(result.html, pageUrl, { generator: cleaned.generator }));
         const bytes = utf8Bytes(cleaned.text);
         if (overTextBudget(textBytes, bytes, config.crawl.maxTextBytes)) {
-          return { entry, pageId, result, cleaned, problem: { status: "skipped", error: "text budget" } };
+          return { entry, pageId, result, cleaned, problem: { status: "skipped", error: TEXT_BUDGET } };
         }
         textBytes += bytes;
         return { entry, pageId, result, cleaned, problem: null };
@@ -499,6 +519,22 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
       const fetchedAt = nowIso();
       const key = pageKey(entry.url);
 
+      if (problem?.status === "skipped") {
+        await writePage(ctx, pageId, {
+          status: "skipped",
+          http_status: result.status,
+          fetched_at: fetchedAt,
+          title: cleaned?.title ?? null,
+          html_bytes: result.bytes,
+          error: problem.error,
+        });
+        rowsByKey.set(key, { ...rowsByKey.get(key)!, status: "skipped" });
+        if (problem.error === TEXT_BUDGET && !budgetWarned) {
+          log = appendLog(log, "warn", "The text budget for this site is used up; the remaining pages are skipped");
+          budgetWarned = true;
+        }
+        continue;
+      }
       if (problem?.status === "failed" || !cleaned) {
         pagesFailed++;
         await writePage(ctx, pageId, {
@@ -509,22 +545,6 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
           error: problem?.error ?? "fetch failed",
         });
         rowsByKey.set(key, { ...rowsByKey.get(key)!, status: "failed" });
-        continue;
-      }
-      if (problem?.status === "skipped") {
-        await writePage(ctx, pageId, {
-          status: "skipped",
-          http_status: result.status,
-          fetched_at: fetchedAt,
-          title: cleaned.title,
-          html_bytes: result.bytes,
-          error: problem.error,
-        });
-        rowsByKey.set(key, { ...rowsByKey.get(key)!, status: "skipped" });
-        if (!budgetWarned) {
-          log = appendLog(log, "warn", "The text budget for this site is used up; the remaining pages are skipped");
-          budgetWarned = true;
-        }
         continue;
       }
 
@@ -547,6 +567,8 @@ async function fetchStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
         error: null,
       });
       rowsByKey.set(key, { ...rowsByKey.get(key)!, status: "fetched", text_chars: cleaned.textChars });
+      // A link to the address this page redirected to is the same page, so it is not queued again.
+      if (result.finalUrl && pageKey(result.finalUrl) !== key) seen.add(result.finalUrl);
       pagesFetched++;
       read++;
 

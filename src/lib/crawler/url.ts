@@ -161,19 +161,29 @@ export function normalizeSiteUrl(input: string): string {
   return `https://${hostPart}${port}${path}`;
 }
 
-function normalizePath(pathname: string): string {
+function normalizePath(pathname: string, keepTrailingSlash = false): string {
   let path = pathname.replace(/\/index\.html?$/i, "/");
-  if (path.length > 1) path = path.replace(/\/+$/, "");
+  if (path.length > 1) path = keepTrailingSlash ? path.replace(/\/{2,}$/, "/") : path.replace(/\/+$/, "");
   return path || "/";
 }
+
+export type NormalizeUrlOptions = {
+  /**
+   * Keep a trailing slash the URL was written with. For URLs that will be
+   * fetched: WordPress answers "/about-us" with a redirect to "/about-us/", so
+   * the slash-less spelling costs a request per page, and a server that does
+   * not redirect answers 404. Comparisons and urlKey still ignore the slash.
+   */
+  keepTrailingSlash?: boolean;
+};
 
 /**
  * One canonical spelling for a page URL so two links to the same page compare
  * equal: resolved against base, no hash, no tracking params, lowercased host,
- * default ports gone, no trailing slash except root. Null for anything that
- * is not an http(s) page.
+ * default ports gone, no trailing slash except root (unless asked to keep it).
+ * Null for anything that is not an http(s) page.
  */
-export function normalizeUrl(url: string, base?: string): string | null {
+export function normalizeUrl(url: string, base?: string, opts: NormalizeUrlOptions = {}): string | null {
   const raw = url.trim();
   if (!raw || NON_PAGE_SCHEME_RE.test(raw)) return null;
 
@@ -189,7 +199,7 @@ export function normalizeUrl(url: string, base?: string): string | null {
   if (!host) return null;
   const hostPart = u.hostname.includes(":") ? `[${host}]` : host;
   const port = u.port ? `:${u.port}` : "";
-  const path = normalizePath(u.pathname);
+  const path = normalizePath(u.pathname, opts.keepTrailingSlash);
 
   let search = u.search.replace(/^\?/, "");
   if (search) {
@@ -742,7 +752,7 @@ export function rankUrls(
   const byKey = new Map<string, { url: string; score: number; reason: string; pathLength: number }>();
 
   for (const c of candidates) {
-    const normalized = normalizeUrl(c.url, opts.home);
+    const normalized = normalizeUrl(c.url, opts.home, { keepTrailingSlash: true });
     if (!normalized) continue;
     if (!isSameSite(normalized, opts.home)) continue;
     if (!looksLikeHtmlPath(normalized)) continue;
@@ -757,9 +767,15 @@ export function rankUrls(
     const existing = byKey.get(key);
     if (!existing) {
       byKey.set(key, { url: normalized, score, reason: ranked.reason, pathLength: new URL(normalized).pathname.length });
-    } else if (score > existing.score) {
-      existing.score = score;
-      existing.reason = ranked.reason;
+    } else {
+      if (score > existing.score) {
+        existing.score = score;
+        existing.reason = ranked.reason;
+      }
+      // Fetch the spelling the site publishes: a link the cleaner stripped loses to the sitemap's "/about-us/".
+      if (normalized.endsWith("/") && !existing.url.endsWith("/") && new URL(normalized).pathname !== "/") {
+        existing.url = normalized;
+      }
     }
   }
 

@@ -8,6 +8,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Row = Record<string, unknown>;
 
+/** What the fetch mock returns: a page, or a failure with no HTML. */
+type FetchMockResult = {
+  ok: boolean;
+  status: number;
+  finalUrl: string;
+  html: string | null;
+  contentType: string;
+  bytes: number;
+  error?: string;
+};
+
 /** The shape the extract mock takes and returns; `model` is null where the real one skips the model. */
 type ExtractMockInput = { url: string; text?: string; ctx: { runId: string } };
 type ExtractMockResult = {
@@ -166,14 +177,16 @@ const h = vi.hoisted(() => {
     blockedByRobots: [],
   }));
 
-  const fetchPage = vi.fn(async (url: string) => ({
-    ok: true,
-    status: 200,
-    finalUrl: url,
-    html: PAGE_HTML(url),
-    contentType: "text/html",
-    bytes: 400,
-  }));
+  const fetchPage = vi.fn(
+    async (url: string): Promise<FetchMockResult> => ({
+      ok: true,
+      status: 200,
+      finalUrl: url,
+      html: PAGE_HTML(url),
+      contentType: "text/html",
+      bytes: 400,
+    }),
+  );
 
   const extractPage = vi.fn(async (input: ExtractMockInput): Promise<ExtractMockResult> => {
     state.llm.push({ run_id: input.ctx.runId, cost_usd: 0.001 });
@@ -202,7 +215,7 @@ const h = vi.hoisted(() => {
     { fieldId: "email", value: "hi@acme.example.com", quote: "mailto:hi@acme.example.com", url: "https://acme.example.com/", source: "link", confidence: 0.8 },
   ]);
 
-  return { state, fake, DbError, discoverSite, fetchPage, extractPage, deterministicFindings };
+  return { state, fake, DbError, discoverSite, fetchPage, extractPage, deterministicFindings, PAGE_HTML };
 });
 
 vi.mock("server-only", () => ({}));
@@ -340,6 +353,72 @@ describe("stepRun, the happy path", () => {
       latest_fact_sheet_id: sheet.id,
       business_name: "Acme Roofing",
     });
+  });
+});
+
+describe("stepRun when a page redirects to another page of the run", () => {
+  const HOME = "https://acme.example.com/";
+  const OLD = "https://acme.example.com/about";
+  const LIVE = "https://acme.example.com/about-us/";
+
+  function seedRedirect() {
+    seed({
+      run: {
+        status: "running",
+        phase: "fetch",
+        pages_planned: 3,
+        cursor: {
+          homeUrl: HOME,
+          usedSitemap: true,
+          queue: [
+            { url: HOME, rank: 0, reason: "home page" },
+            { url: OLD, rank: 1, reason: "about page" },
+            { url: LIVE, rank: 2, reason: "about page" },
+          ],
+          seen: [HOME, OLD, LIVE],
+          nextRank: 3,
+        },
+      },
+    });
+    addPage({ url: HOME, rank: 0, status: "queued" });
+    addPage({ url: OLD, rank: 1, status: "queued" });
+    addPage({ url: LIVE, rank: 2, status: "queued" });
+  }
+  const page = (url: string) => pages().find((p) => p.url === url);
+
+  it("reads the page once, under the address it lands on", async () => {
+    seedRedirect();
+    h.fetchPage.mockImplementation(async (url: string) => ({
+      ok: true,
+      status: 200,
+      finalUrl: url === OLD ? LIVE : url,
+      html: h.PAGE_HTML(url),
+      contentType: "text/html",
+      bytes: 400,
+    }));
+
+    await stepRun(RUN, USER);
+    h.fetchPage.mockReset();
+
+    expect(page(OLD)).toMatchObject({ status: "skipped", error: `same page as ${LIVE}` });
+    expect(page(LIVE)).toMatchObject({ status: "fetched" });
+    expect(run()).toMatchObject({ phase: "extract", pages_fetched: 2 });
+    expect((run().cursor as { extractQueue?: string[] }).extractQueue).not.toContain(OLD);
+  });
+
+  it("keeps the redirecting page when the page it lands on could not be read", async () => {
+    seedRedirect();
+    h.fetchPage.mockImplementation(async (url: string) =>
+      url === LIVE
+        ? { ok: false, status: 500, finalUrl: url, html: null, contentType: "text/html", bytes: 0, error: "HTTP 500" }
+        : { ok: true, status: 200, finalUrl: url === OLD ? LIVE : url, html: h.PAGE_HTML(url), contentType: "text/html", bytes: 400 },
+    );
+
+    await stepRun(RUN, USER);
+    h.fetchPage.mockReset();
+
+    expect(page(OLD)).toMatchObject({ status: "fetched" });
+    expect(page(LIVE)).toMatchObject({ status: "failed" });
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPrivateHost, isSameSite, looksLikeHtmlPath, normalizeSiteUrl, normalizeUrl, parseIpv6, rankUrl, rankUrls } from "./url";
+import { isPrivateHost, isSameSite, looksLikeHtmlPath, normalizeSiteUrl, normalizeUrl, parseIpv6, rankUrl, rankUrls, urlKey } from "./url";
 
 describe("normalizeSiteUrl", () => {
   it("accepts bare domains and variants", () => {
@@ -145,7 +145,7 @@ describe("rankUrls", () => {
     );
     expect(ranked.map((r) => r.url)).toEqual([
       "https://e.com/",
-      "https://www.e.com/about",
+      "https://www.e.com/about/",
       "https://e.com/contact",
       "https://e.com/services",
     ]);
@@ -258,6 +258,36 @@ describe("rankUrls with home page links", () => {
     expect(ranked.findIndex((r) => r.url.endsWith("/how-it-works"))).toBeLessThan(
       ranked.findIndex((r) => r.url.endsWith("/EP")),
     );
+  });
+});
+
+describe("rankUrls and the spelling it fetches", () => {
+  it("fetches the spelling the sitemap publishes, not the slash-less one a cleaned link has", () => {
+    const ranked = rankUrls(
+      [
+        { url: "https://e.com/" },
+        { url: "https://e.com/about-us", text: "About", fromHome: true },
+        { url: "https://e.com/about-us/" },
+        { url: "https://e.com/contact/" },
+        { url: "https://e.com/team//" },
+      ],
+      { home: "https://e.com/", max: 10 },
+    );
+    expect(ranked.map((r) => r.url)).toEqual([
+      "https://e.com/",
+      "https://e.com/about-us/",
+      "https://e.com/team/",
+      "https://e.com/contact/",
+    ]);
+    // The link text still counts for the page it names.
+    expect(ranked[1].reason).toBe("about page");
+  });
+
+  it("keeps the slash only when asked, so keys and comparisons do not change", () => {
+    expect(normalizeUrl("https://e.com/about-us/")).toBe("https://e.com/about-us");
+    expect(normalizeUrl("https://e.com/about-us/", undefined, { keepTrailingSlash: true })).toBe("https://e.com/about-us/");
+    expect(normalizeUrl("/a/index.html", "https://e.com/", { keepTrailingSlash: true })).toBe("https://e.com/a/");
+    expect(urlKey("https://e.com/about-us/")).toBe(urlKey("https://e.com/about-us"));
   });
 });
 

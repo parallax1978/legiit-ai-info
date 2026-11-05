@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fetchPage, fetchText, requestTimeout } from "./fetch";
+import { parseRobots } from "./robots";
 
 const opts = { userAgent: "LegiitAiInfoBot/0.1", timeoutMs: 1000, maxBytes: 100_000 };
 
@@ -129,6 +130,29 @@ describe("fetchPage", () => {
     expect(called).toBe(false);
     expect(r.ok).toBe(false);
     expect(r.error).toContain("private");
+  });
+});
+
+describe("fetchPage with robots.txt", () => {
+  const robots = parseRobots("User-agent: *\nDisallow: /members/", "https://example.com", "LegiitAiInfoBot/0.1");
+
+  it("never requests a page robots.txt disallows", async () => {
+    const { fetchImpl, requested } = routes({ "https://example.com/members/": html("<html>members</html>") });
+    const r = await fetchPage("https://example.com/members/", { ...opts, fetchImpl, allowed: robots.allowed });
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("robots.txt disallows this page");
+    expect(requested).toEqual([]);
+  });
+
+  it("does not follow a redirect into a disallowed page", async () => {
+    const { fetchImpl, requested } = routes({
+      "https://example.com/team": redirect("https://example.com/members/team/"),
+      "https://example.com/members/team/": html("<html>team</html>"),
+    });
+    const r = await fetchPage("https://example.com/team", { ...opts, fetchImpl, allowed: robots.allowed });
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("redirected to a page robots.txt disallows");
+    expect(requested).toEqual(["https://example.com/team"]);
   });
 });
 

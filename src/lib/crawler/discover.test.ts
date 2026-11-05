@@ -34,11 +34,11 @@ describe("discoverSite", () => {
     expect(result.robots.sitemaps).toEqual(["https://example.com/sitemap.xml"]);
     expect(result.sitemapsRead).toEqual(["https://example.com/sitemap.xml"]);
     expect(result.usedSitemap).toBe(true);
-    expect(result.blockedByRobots).toEqual(["https://example.com/private/notes"]);
+    expect(result.blockedByRobots).toEqual(["https://example.com/private/notes/"]);
     expect(result.queue).toEqual([
       { url: "https://example.com/", rank: 0, reason: "home page" },
-      { url: "https://example.com/about", rank: 1, reason: "about page" },
-      { url: "https://example.com/contact", rank: 2, reason: "contact page" },
+      { url: "https://example.com/about/", rank: 1, reason: "about page" },
+      { url: "https://example.com/contact/", rank: 2, reason: "contact page" },
     ]);
   });
 
@@ -76,8 +76,8 @@ describe("addDiscoveredLinks", () => {
       { home, max: 2 },
     );
     expect(added).toEqual([
-      { url: "https://example.com/about-us", rank: 1, reason: "about page" },
-      { url: "https://example.com/team", rank: 2, reason: "team page" },
+      { url: "https://example.com/about-us/", rank: 1, reason: "about page" },
+      { url: "https://example.com/team/", rank: 2, reason: "team page" },
     ]);
   });
 
@@ -89,7 +89,7 @@ describe("addDiscoveredLinks", () => {
       nextRank: 7,
       allowed: robots.allowed,
     });
-    expect(added).toEqual([{ url: "https://example.com/pricing", rank: 7, reason: "pricing page" }]);
+    expect(added).toEqual([{ url: "https://example.com/pricing/", rank: 7, reason: "pricing page" }]);
   });
 
   it("returns nothing when there is no room", () => {

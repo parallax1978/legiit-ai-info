@@ -40,6 +40,11 @@ export type FetchPageOptions = {
   resolveHost?: ResolveHost;
   /** Epoch milliseconds. No request starts after it, and the timeout is cut to fit before it. */
   deadline?: number;
+  /**
+   * The site's robots.txt check. Applied to the URL and to every redirect hop,
+   * so an allowed address that redirects into a disallowed one is not fetched.
+   */
+  allowed?: (url: string) => boolean;
 };
 
 export type FetchTextOptions = FetchPageOptions & {
@@ -289,6 +294,13 @@ export async function fetchText(url: string, opts: FetchTextOptions): Promise<Fe
       }
       if (hop > 0 && !opts.allowOffSite && !isSameSite(url, current)) {
         return { ...base, finalUrl: current, error: `redirected off site to ${hostOf(current)}`, redirectedOffSite: true };
+      }
+      if (opts.allowed && !opts.allowed(current)) {
+        return {
+          ...base,
+          finalUrl: current,
+          error: hop === 0 ? "robots.txt disallows this page" : "redirected to a page robots.txt disallows",
+        };
       }
 
       const res = await fetchImpl(current, { method: "GET", redirect: "manual", signal, headers });

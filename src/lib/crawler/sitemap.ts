@@ -6,7 +6,7 @@
 import { load } from "cheerio";
 import { isElement, tagName, type DomElement, type DomNode } from "./dom";
 import { MIN_REQUEST_MS, fetchText, type ResolveHost } from "./fetch";
-import { isSameSite, looksLikeHtmlPath, normalizeUrl } from "./url";
+import { isSameSite, looksLikeHtmlPath, normalizeUrl, urlKey } from "./url";
 
 export type ParsedSitemap = { kind: "index" | "urlset" | "unknown"; urls: string[] };
 
@@ -135,9 +135,10 @@ export async function discoverSitemapUrls(
 
   const addUrl = (loc: string) => {
     if (urls.length >= opts.maxUrls) return;
-    const n = normalizeUrl(loc);
+    // The sitemap's own spelling is kept for fetching ("/about-us/"); the key ignores the slash.
+    const n = normalizeUrl(loc, undefined, { keepTrailingSlash: true });
     if (!n || !isSameSite(n, origin) || !looksLikeHtmlPath(n)) return;
-    const key = n.toLowerCase();
+    const key = (urlKey(n) ?? n).toLowerCase();
     if (urlSeen.has(key)) return;
     urlSeen.add(key);
     urls.push(n);
