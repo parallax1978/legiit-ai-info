@@ -152,6 +152,21 @@ export const config = {
     extractAttempts: 2,
   },
 
+  generate: {
+    /** Output tokens for one writer call; a whole page's main sections fit in well under this. */
+    maxOutputTokens: 10_000,
+    /** Per-request timeout, milliseconds. One call per step, inside the 300 s step ceiling. */
+    timeoutMs: 170_000,
+    effort: "medium" as const,
+    /** Rewrite passes after a failed lint before the page ships with its report. */
+    lintAttempts: 2,
+    /** Longer than the step route's ceiling, so a killed step never overlaps the next. */
+    lockLeaseMs: 330_000,
+    maxStepAttempts: 3,
+    /** Vercel function ceiling for the generation step route (a literal there too). */
+    maxDurationSeconds: 300,
+  },
+
   plans: {
     free: { projectsPerMonth: 1, crawlsPerProject: 2, generationsPerProject: 0 },
     paid: { projectsPerMonth: 10, crawlsPerProject: 5, generationsPerProject: 10 },

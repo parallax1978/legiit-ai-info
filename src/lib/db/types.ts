@@ -244,6 +244,16 @@ export type GenerationRow = {
   tokens_out: number;
   cost_usd: number;
   error: string | null;
+  draft: Json | null;
+  cursor: Json;
+  log: RunLogEntry[];
+  locked_at: string | null;
+  lock_token: string | null;
+  attempts: number;
+  title: string | null;
+  meta_description: string | null;
+  platform: PlatformT;
+  page_url: string | null;
   created_at: string;
   updated_at: string;
 };

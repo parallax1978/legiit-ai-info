@@ -61,6 +61,8 @@ export interface StructuredCallOptions<S extends z.ZodType> {
   thinking?: ThinkingMode;
   /** Mark the system prompt for prompt caching. */
   cacheSystem?: boolean;
+  /** Per-request timeout, milliseconds; config.llm.timeoutMs when left out. */
+  timeoutMs?: number;
   ctx: CallContext;
 }
 
@@ -101,7 +103,7 @@ export async function callStructured<S extends z.ZodType>(
         ...(opts.effort ? { effort: opts.effort } : {}),
       },
       ...(thinking ? { thinking } : {}),
-    });
+    }, opts.timeoutMs ? { timeout: opts.timeoutMs } : undefined);
   } catch (error) {
     // No response came back (an HTTP error, a network error, a timeout), so there is no usage to record.
     await logCall(opts, { inputTokens: 0, outputTokens: 0 }, 0, Date.now() - started, false, errorText(error));
