@@ -551,7 +551,7 @@ function phraseAt(tokens: string[], phrase: string[], at: number): boolean {
  * how strongly. A keyword at the head of the run is a strong match ("about-us",
  * "terms-of-service", "rates-policies"). In a short run (three tokens or fewer)
  * a keyword anywhere is nearly as strong ("meet-the-team"). In a run of four or
- * five a keyword past the head is weak ("play-therapy-in-langley-bc"). In longer
+ * five a keyword past the head is weak ("pet-grooming-in-austin-tx"). In longer
  * runs, which are article titles, only the head counts: "pumpkin-to-talk-about-tee"
  * is not an about page. Longer phrases beat shorter ones, so "join our team" is
  * careers, not team, and "terms of service" is legal, not services.

@@ -273,14 +273,17 @@ made with the admin API get their profile row from the trigger, every query the
 scan makes runs on the real PostgREST, HTML lands in the private bucket, and
 the browser key reads only its owner's rows and can write none of them.
 
-A real scan of darcybaileycounselling.com with Haiku ran on the project on
-2026-11-06: 40 pages, 175 seconds, $0.086, 1,750 findings of which 82 were
+Two real scans with Haiku ran on the project on 2026-11-06. A 40-page
+WordPress site took 175 seconds and $0.086: 1,750 findings of which 82 were
 dropped by verification, a fact sheet of 25 found, 22 contradicted, 1 missing.
-It showed four things to tune: every therapist with a profile page was filed
-as a founder, each page's own JSON-LD url became a website_url candidate, the
-founded date took "17 yrs in practice", and lists repeat near-duplicates
-across pages (71 services). The first three are deterministic fixes in
-verification and the merge; the fourth waits for the writer.
+legiit.com took 103 seconds and $0.021: 31 found, 3 contradicted, 14 missing.
+They showed five things to tune: every person with a profile page was filed as
+a founder, each page's own JSON-LD url became a website_url candidate, the
+founded date took "17 yrs in practice", a paraphrase passes when its words are
+somewhere on the page even though its quote does not state it (nine
+core_offering candidates from product pages), and lists repeat near-duplicates
+across pages (71 services). The first four are deterministic fixes in
+verification and the merge; the fifth waits for the writer.
 
 **Not yet verified with the real services:** the magic-link email itself (the
 template and the redirect allow-list are set, and the built-in mailer allows

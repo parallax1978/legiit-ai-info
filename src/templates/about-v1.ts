@@ -11,9 +11,9 @@ import type { TemplateSpec } from "./types";
 export const ABOUT_V1: TemplateSpec = {
   id: "about-v1",
   // 2: social_profiles conflicts on owner. 4: hours are written as the page writes them, and item
-  // keys say how the quote check reads them (check). 5: examples no longer taken from a client's
+  // keys say how the quote check reads them (check). 5 and 6: no example is taken from a client's
   // site. Raising it re-seeds the templates table.
-  version: 5,
+  version: 6,
   name: "About page (eight sections)",
   description:
     "Value proposition, what the company does, what makes it different, who uses it, the team, how it works, key facts table, and FAQ, with Organization or LocalBusiness schema plus AboutPage and FAQPage.",
@@ -311,8 +311,8 @@ export const ABOUT_V1: TemplateSpec = {
           label: "Days",
           type: "text",
           required: true,
-          hint: "Monday to Thursday",
-          extractHint: 'as the page writes them, for example "Monday to Thursday" or "Mon - Thu"',
+          hint: "Monday to Friday",
+          extractHint: 'as the page writes them, for example "Monday to Friday" or "Mon - Fri"',
           check: "days",
         },
         {
@@ -320,7 +320,7 @@ export const ABOUT_V1: TemplateSpec = {
           label: "Opens",
           type: "text",
           required: true,
-          hint: "9:00 AM",
+          hint: "8:00 AM",
           extractHint: 'as the page writes it, for example "9am" or "09:00"',
           check: "time",
         },
@@ -329,7 +329,7 @@ export const ABOUT_V1: TemplateSpec = {
           label: "Closes",
           type: "text",
           required: true,
-          hint: "8:00 PM",
+          hint: "6:00 PM",
           extractHint: 'as the page writes it, for example "8pm" or "20:00"',
           check: "time",
         },
@@ -384,7 +384,7 @@ export const ABOUT_V1: TemplateSpec = {
       itemShape: [
         { key: "name", label: "Name", type: "text", required: true },
         { key: "description", label: "What it does and the outcome", type: "long_text", required: true },
-        { key: "price", label: "Price", type: "text", hint: "$170 per 50-minute session", check: "quoted" },
+        { key: "price", label: "Price", type: "text", hint: "$120 an hour", check: "quoted" },
         { key: "url", label: "Page", type: "url" },
       ],
       itemKind: "service",
@@ -407,7 +407,7 @@ export const ABOUT_V1: TemplateSpec = {
       itemShape: [
         { key: "name", label: "Plan or item", type: "text", required: true },
         { key: "price", label: "Price", type: "text", required: true, hint: "$47 a month", check: "quoted" },
-        { key: "notes", label: "Notes", type: "text", hint: "first 7 days free; plus GST" },
+        { key: "notes", label: "Notes", type: "text", hint: "first 7 days free; two months free on annual" },
       ],
       itemKind: "price",
       dedupeKey: "name",
@@ -421,8 +421,8 @@ export const ABOUT_V1: TemplateSpec = {
       type: "text",
       required: false,
       lookFor:
-        "A short phrase that sums up the prices: 'from $6 an order', '$170 to $195 per 50-minute session', '$47 to $497 a month'.",
-      question: "Sum up the pricing in one phrase, for example 'from $6 an order' or '$170 to $195 a session'.",
+        "A short phrase that sums up the prices: 'from $6 an order', '$120 to $160 an hour', '$47 to $497 a month'.",
+      question: "Sum up the pricing in one phrase, for example 'from $6 an order' or '$120 to $160 an hour'.",
       rendersIn: ["page", "schema"],
       schemaProperty: "priceRange",
     },
@@ -617,7 +617,7 @@ export const ABOUT_V1: TemplateSpec = {
       itemShape: [
         { key: "name", label: "Full name", type: "text", required: true },
         { key: "title", label: "Title", type: "text", required: true, hint: "Founder and CEO" },
-        { key: "credentials", label: "Credentials", type: "text", hint: "MSW, RSW, RCC", check: "codes" },
+        { key: "credentials", label: "Credentials", type: "text", hint: "CPA, MBA", check: "codes" },
         { key: "bio", label: "Backstory (two sentences)", type: "long_text" },
         { key: "url", label: "Profile page", type: "url" },
         { key: "linkedin", label: "LinkedIn", type: "url" },

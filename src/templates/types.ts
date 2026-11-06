@@ -46,12 +46,12 @@ export interface ListItemShape {
   wording?: "summary";
   /**
    * How the quote check reads this key when a plain text check is the wrong test:
-   * - "codes": short codes such as credentials ("MSW, RSW, RCC"); every code must be on the page.
+   * - "codes": short codes such as credentials ("CPA, MBA"); every code must be on the page.
    * - "quoted": its words must be in the quote, as its numbers are ("Free" is on most pages, so a price is read from its quote).
    * - "heading": a heading of one or two words the model writes for the rest of the item (a policy's
    *   "Cancellation"); its words need not be on the page, but the quote must be about the item.
    * - "choice": a value the model picks rather than reads (a platform name); only its numbers are checked.
-   * - "days": days of the week, compared as a set ("Mon - Thu" is "Monday to Thursday").
+   * - "days": days of the week, compared as a set ("Mon - Fri" is "Monday to Friday").
    * - "time": a clock time, compared in minutes ("17:00" is "5:00 PM").
    */
   check?: "codes" | "quoted" | "heading" | "choice" | "days" | "time";

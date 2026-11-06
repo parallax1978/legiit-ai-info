@@ -325,7 +325,7 @@ function addressShown(link: string, text: string): boolean {
  * True when the text shows a profile's handle as a handle: "@cmwlegiit", or
  * "/legiitofficial" in an address. A word that happens to equal the handle
  * does not count ("Legiit" the business, "Chris" the person), nor does the
- * handle inside a longer word or a domain ("darcybaileycounselling.com").
+ * handle inside a longer word or a domain ("acme-roofing.example").
  */
 function handleShown(handle: string, text: string): boolean {
   return new RegExp(`[@/]${escapeRegExp(handle)}${ADDRESS_END}`).test(text);

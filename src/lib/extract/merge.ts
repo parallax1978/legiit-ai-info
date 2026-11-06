@@ -302,7 +302,7 @@ function samePage(a: Variant, b: Variant): boolean {
  * - Two full names that share a profile link are the same person only when
  *   they share a name part and their given names fit (equal, or one an initial
  *   or short form of the other: "Pal Manhas" / "Palvinder Manhas-Bains"). A
- *   shared surname is not a shared name: Mark and Mary Bailey stay two people.
+ *   shared surname is not a shared name: Mark and Mary Carter stay two people.
  */
 function samePersonItem(field: TemplateField, target: MergedItem, v: Variant, listPages: Set<string>): boolean {
   const key = dedupeKeyOf(field);
