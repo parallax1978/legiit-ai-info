@@ -2,8 +2,8 @@ import { CircleCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /*
-  An excerpt of the Darcy Bailey & Associates Counselling fact sheet from
-  examples/fixtures/darcy-bailey.factsheet.json: real values, real quotes.
+  An excerpt of the Legiit fact sheet from a scan of legiit.com on 2026-11-06:
+  real values, real quotes, and the gap and the contradiction the scan found.
 */
 type Row = {
   status: "found" | "conflict" | "missing";
@@ -16,29 +16,29 @@ type Row = {
 const rows: Row[] = [
   {
     status: "found",
-    label: "Phone",
-    value: "604-533-9163",
-    detail: "“Call 604-533-9163”",
+    label: "Founded",
+    value: "February 7, 2018",
+    detail: "“Legiit launched on February 7, 2018.”",
     source: "about page",
   },
   {
     status: "found",
-    label: "Fees",
-    value: "$170 per 50-minute session",
-    detail: "“Individual counselling is $170 per 50-minute session”",
-    source: "rates page",
+    label: "Pricing",
+    value: "from $6 an order",
+    detail: "“Orders start at $6, the average order is about $90, and the largest buyers spend on average $30,000 a month.”",
+    source: "about page",
   },
   {
     status: "conflict",
-    label: "Years in business",
-    value: "17+ on the About page, 19+ on the home page",
-    detail: "Pick one, or type the right number.",
+    label: "Free offer",
+    value: "“first 7 days free” on the About page, “Early savings start now” on the SEO page",
+    detail: "Pick one, or type the offer.",
   },
   {
     status: "missing",
-    label: "Founder's book title",
+    label: "Response time",
     value: "not on the site",
-    detail: "What is the title of Darcy's book?",
+    detail: "How quickly does the business respond to a message, and is support available around the clock?",
   },
 ];
 
@@ -54,7 +54,7 @@ export function FactSheetPreview() {
       <div className="absolute -inset-6 rounded-[2rem] bg-brand/40 blur-3xl" aria-hidden="true" />
       <div className="relative rounded-2xl border border-white/10 bg-white p-5 text-ink shadow-pop sm:p-6">
         <p className="eyebrow text-brand">Fact sheet</p>
-        <p className="mt-1 text-lg font-bold tracking-tight">Darcy Bailey &amp; Associates Counselling</p>
+        <p className="mt-1 text-lg font-bold tracking-tight">Legiit</p>
         <ul className="mt-4 divide-y divide-line">
           {rows.map((row) => {
             const p = pill[row.status];

@@ -11,8 +11,9 @@ import type { TemplateSpec } from "./types";
 export const ABOUT_V1: TemplateSpec = {
   id: "about-v1",
   // 2: social_profiles conflicts on owner. 4: hours are written as the page writes them, and item
-  // keys say how the quote check reads them (check). Raising it re-seeds the templates table.
-  version: 4,
+  // keys say how the quote check reads them (check). 5: examples no longer taken from a client's
+  // site. Raising it re-seeds the templates table.
+  version: 5,
   name: "About page (eight sections)",
   description:
     "Value proposition, what the company does, what makes it different, who uses it, the team, how it works, key facts table, and FAQ, with Organization or LocalBusiness schema plus AboutPage and FAQPage.",
@@ -144,9 +145,9 @@ export const ABOUT_V1: TemplateSpec = {
       type: "text",
       required: true,
       lookFor:
-        "The short noun phrase that completes '[COMPANY] is a ___': 'curated freelance marketplace', 'counselling practice in Langley, BC', 'family-run roofing company'. Take it from the tagline, the hero, or the about page.",
+        "The short noun phrase that completes '[COMPANY] is a ___': 'curated freelance marketplace', 'family dental clinic in Austin, Texas', 'family-run roofing company'. Take it from the tagline, the hero, or the about page.",
       question:
-        "Finish this sentence in a few words: '[COMPANY] is a ___.' (For example: 'curated freelance marketplace', 'counselling practice in Langley, BC'.)",
+        "Finish this sentence in a few words: '[COMPANY] is a ___.' (For example: 'curated freelance marketplace', 'family dental clinic in Austin, Texas'.)",
       rendersIn: ["page", "schema"],
       schemaProperty: "description",
     },
@@ -157,7 +158,7 @@ export const ABOUT_V1: TemplateSpec = {
       type: "text",
       required: true,
       lookFor:
-        "What the business does for customers in one phrase, from the hero, the tagline, or the first paragraph of the about page: 'provides in-person and online therapy for children, teens, adults, couples, and families'.",
+        "What the business does for customers in one phrase, from the hero, the tagline, or the first paragraph of the about page: 'provides in-person and online tutoring for high school students'.",
       question:
         "What does the business do for its customers, in one phrase? (For example: 'buy SEO, content, and design work from vetted freelancers, one service at a time'.)",
       rendersIn: ["page", "schema"],
@@ -681,7 +682,7 @@ export const ABOUT_V1: TemplateSpec = {
       type: "text",
       required: false,
       lookFor:
-        "How many people work at the business: '45 people across six continents', '14 registered therapists and three client care staff'.",
+        "How many people work at the business: '45 people across six continents', '12 technicians and two office staff'.",
       question: "How many people are on the team, and how is it made up?",
       rendersIn: ["page", "schema"],
       schemaProperty: "numberOfEmployees",
@@ -733,7 +734,7 @@ export const ABOUT_V1: TemplateSpec = {
       type: "text",
       required: true,
       lookFor:
-        "Who the customer deals with day to day: the freelancer directly, an account manager, a client care team then a therapist, the owner.",
+        "Who the customer deals with day to day: the freelancer directly, an account manager, a client care team then a specialist, the owner.",
       question:
         "Who does a customer work with day to day: the owner, a dedicated person, a team, or someone matched to them?",
       rendersIn: ["page"],

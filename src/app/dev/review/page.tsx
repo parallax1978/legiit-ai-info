@@ -9,58 +9,47 @@ import type { FactSheetData } from "@/lib/facts/types";
 import { recomputeStats } from "@/lib/extract/merge";
 import { schemaGroups, type PageDetail } from "@/lib/projects/view";
 import { ABOUT_V1 } from "@/templates/about-v1";
-import darcy from "../../../../examples/fixtures/darcy-bailey.factsheet.json";
+import legiit from "../../../../examples/fixtures/legiit.factsheet.json";
 
 /*
-  Development-only preview of the review screen, fed by the Darcy Bailey
-  fixture, so the screen can be checked without a database. 404 in production.
+  Development-only preview of the review screen, fed by the Legiit fixture,
+  so the screen can be checked without a database. 404 in production.
 */
 export const dynamic = "force-dynamic";
 
 const pages: PageDetail[] = [
   {
     id: "p1",
-    url: "https://darcybaileycounselling.com/",
-    title: "Darcy Bailey & Associates Counselling | Langley, BC",
+    url: "https://legiit.com/",
+    title: "Legiit.com - Think Big",
     status: "extracted",
     rank: 0,
     reason: "home page",
     httpStatus: 200,
-    textChars: 6140,
+    textChars: 12129,
     error: null,
   },
   {
     id: "p2",
-    url: "https://darcybaileycounselling.com/about-us/",
-    title: "About Us",
+    url: "https://legiit.com/about",
+    title: "About Legiit | Curated Freelance Marketplace",
     status: "extracted",
     rank: 1,
     reason: "about page",
     httpStatus: 200,
-    textChars: 9120,
+    textChars: 9840,
     error: null,
   },
   {
     id: "p3",
-    url: "https://darcybaileycounselling.com/rates/",
-    title: "Rates",
-    status: "extracted",
-    rank: 2,
-    reason: "pricing page",
-    httpStatus: 200,
-    textChars: 2210,
-    error: null,
-  },
-  {
-    id: "p4",
-    url: "https://darcybaileycounselling.com/wp-content/uploads/brochure.pdf",
+    url: "https://legiit.com/faq",
     title: null,
     status: "failed",
-    rank: 3,
-    reason: "about (link text)",
-    httpStatus: 200,
+    rank: 2,
+    reason: "faq page",
+    httpStatus: 404,
     textChars: 0,
-    error: "Not an HTML page (application/pdf)",
+    error: "HTTP 404",
   },
 ];
 
@@ -68,21 +57,21 @@ const existingSchema: JsonLdBlock[] = [
   {
     data: {
       "@context": "https://schema.org",
-      "@type": "MedicalBusiness",
-      name: "Darcy Bailey Counselling",
-      medicalSpecialty: "Psychiatry",
-      address: { "@type": "PostalAddress", postalCode: "BC V2Y 1N5" },
+      "@type": "Organization",
+      name: "Legiit",
+      url: "https://legiit.com/",
+      sameAs: ["https://www.youtube.com/@LegiitOfficial", "https://www.linkedin.com/company/legiit", "https://x.com/legiitcom"],
     },
     raw: "",
-    types: ["MedicalBusiness"],
+    types: ["Organization"],
   },
-  { data: null, raw: "{ \"@type\": \"LocalBusiness\", ", error: "Unexpected end of JSON input", types: [] },
+  { data: null, raw: "{ \"@type\": \"WebSite\", ", error: "Unexpected end of JSON input", types: [] },
 ];
 
 export default function DevReviewPage() {
   if (process.env.NODE_ENV === "production") notFound();
 
-  const data = darcy as unknown as FactSheetData;
+  const data = legiit as unknown as FactSheetData;
   const stats = recomputeStats(ABOUT_V1, data);
   const factSheet: FactSheetRow = {
     id: "00000000-0000-0000-0000-000000000001",
@@ -108,10 +97,10 @@ export default function DevReviewPage() {
       <main className="flex-1 bg-surface-alt">
         <div className="mx-auto max-w-5xl px-4 py-8">
           <p className="eyebrow text-brand">Development preview</p>
-          <h1 className="mt-2 text-2xl">Darcy Bailey &amp; Associates Counselling</h1>
+          <h1 className="mt-2 text-2xl">Legiit</h1>
           <p className="mt-1 text-ink-muted">
-            The review screen rendered from examples/fixtures/darcy-bailey.factsheet.json. Edits
-            fail here because there is no API behind this page.
+            The review screen rendered from examples/fixtures/legiit.factsheet.json. Edits fail here
+            because there is no API behind this page.
           </p>
           <div className="mt-8">
             <FactSheetReview
