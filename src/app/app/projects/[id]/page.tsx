@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CircleAlert, TriangleAlert } from "lucide-react";
+import { GenerateProvider, type GenerateState } from "@/components/app/generate/generate-context";
+import { GenerationCard } from "@/components/app/generate/generation-card";
+import { GenerationFailed } from "@/components/app/generate/generation-failed";
+import { GenerationProgress } from "@/components/app/generate/generation-progress";
 import { ExistingSchemaPanel } from "@/components/app/review/existing-schema-panel";
 import { FactSheetReview } from "@/components/app/review/fact-sheet-review";
 import { PagesPanel } from "@/components/app/review/pages-panel";
@@ -8,7 +12,8 @@ import { RerunControls, StartScanButton } from "@/components/app/run/rerun-contr
 import { RunProgress } from "@/components/app/run/run-progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { requireUser } from "@/lib/auth";
-import type { CrawlRunRow, FactSheetRow, JsonLdBlock, PageStatusT, ProjectRow } from "@/lib/db/types";
+import type { CrawlRunRow, FactSheetRow, GenerationRow, JsonLdBlock, PageStatusT, ProjectRow } from "@/lib/db/types";
+import { generationViewFromRow, isGenerationFinished, missingRequiredFields, reviewHref } from "@/lib/generate/view";
 import {
   hostOf,
   isRunFinished,
@@ -129,6 +134,46 @@ async function loadPages(supabase: Supabase, runId: string): Promise<PageRow[]> 
   return (dataOrThrow("pages of the scan", result) ?? []) as PageRow[];
 }
 
+/**
+ * The generation the project points at, else the newest one. A newer
+ * generation than the one pointed at (the pointer lags a re-run) wins.
+ */
+async function loadGeneration(supabase: Supabase, project: ProjectRow): Promise<GenerationRow | null> {
+  const [pointed, newest] = await Promise.all([
+    project.latest_generation_id
+      ? supabase
+          .from("generations")
+          .select("*")
+          .eq("id", project.latest_generation_id)
+          .maybeSingle()
+          .then((r) => dataOrThrow("page", r))
+      : Promise.resolve(null),
+    supabase
+      .from("generations")
+      .select("*")
+      .eq("project_id", project.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then((r) => dataOrThrow("page", r)),
+  ]);
+  if (pointed && newest && newest.id !== pointed.id && newest.created_at > pointed.created_at) return newest;
+  return pointed ?? newest ?? null;
+}
+
+/** True when the generation has a share link that has not expired. */
+async function hasShareLink(supabase: Supabase, generationId: string): Promise<boolean> {
+  const now = new Date().toISOString();
+  const result = await supabase
+    .from("share_links")
+    .select("id")
+    .eq("generation_id", generationId)
+    .or(`expires_at.is.null,expires_at.gt."${now}"`)
+    .limit(1)
+    .maybeSingle();
+  return dataOrThrow("share link", result) !== null;
+}
+
 function templateFor(id: string): TemplateSpec {
   try {
     return getTemplate(id);
@@ -153,7 +198,11 @@ export default async function ProjectPage({ params }: { params: Params }) {
   const project = await loadProject(supabase, id, user.id);
   if (!project) notFound();
 
-  const [run, factSheet] = await Promise.all([loadRun(supabase, project), loadFactSheet(supabase, project)]);
+  const [run, factSheet, generation] = await Promise.all([
+    loadRun(supabase, project),
+    loadFactSheet(supabase, project),
+    loadGeneration(supabase, project),
+  ]);
   const pages = run ? await loadPages(supabase, run.id) : [];
   const spec = templateFor(project.template_id);
 
@@ -162,6 +211,23 @@ export default async function ProjectPage({ params }: { params: Params }) {
   const failed = runView !== null && (runView.status === "failed" || runView.phase === "failed");
   const cancelled = runView?.status === "cancelled";
   const finishedWithoutSheet = runView !== null && runView.done && !factSheet;
+
+  const genView = generation ? generationViewFromRow(generation) : null;
+  const generating = genView !== null && !isGenerationFinished(genView);
+  const genDone = genView?.status === "done" && generation !== null;
+  const genFailed = genView?.status === "failed";
+  const shared = genDone ? await hasShareLink(supabase, generation.id) : false;
+  // The sheet was replaced, or edited in place (its updated_at moves on every edit), after the page was written.
+  const staleFactSheet =
+    genDone && factSheet !== null && (factSheet.id !== generation.fact_sheet_id || factSheet.updated_at > generation.created_at);
+  const missing = missingRequiredFields(spec, factSheet?.data, project.business_name);
+  const generateState: GenerateState = {
+    projectId: project.id,
+    hasFactSheet: factSheet !== null,
+    busy: generating,
+    missing,
+    reviewHref: reviewHref(project.id, missing[0] ? { fieldId: missing[0].id } : undefined),
+  };
 
   const pageDetails: PageDetail[] = pages.map((p) => ({
     id: p.id,
@@ -183,73 +249,81 @@ export default async function ProjectPage({ params }: { params: Params }) {
   }
 
   return (
-    <div className="space-y-6">
-      <ProjectHeader project={project} run={runView} hasPages={hasPages} />
+    <GenerateProvider value={generateState}>
+      <div className="space-y-6">
+        <ProjectHeader project={project} run={runView} hasPages={hasPages} />
 
-      {running && runView ? <RunProgress key={runView.id} initial={runView} /> : null}
+        {running && runView ? <RunProgress key={runView.id} initial={runView} /> : null}
 
-      {failed && runView ? (
-        <Alert className="border-bad/30 bg-bad-soft text-bad">
-          <CircleAlert aria-hidden="true" />
-          <AlertTitle>The scan failed</AlertTitle>
-          <AlertDescription className="text-bad/90">
-            <p>{runView.error?.trim() || "Something stopped the scan before it finished."}</p>
-            <div className="mt-3">
-              <RerunControls projectId={project.id} canReuse={hasPages} />
+        {generating && genView ? <GenerationProgress key={genView.id} initial={genView} /> : null}
+
+        {genFailed && genView ? <GenerationFailed generation={genView} /> : null}
+
+        {genDone ? <GenerationCard generation={genView} hasShareLink={shared} staleFactSheet={staleFactSheet} /> : null}
+
+        {failed && runView ? (
+          <Alert className="border-bad/30 bg-bad-soft text-bad">
+            <CircleAlert aria-hidden="true" />
+            <AlertTitle>The scan failed</AlertTitle>
+            <AlertDescription className="text-bad/90">
+              <p>{runView.error?.trim() || "Something stopped the scan before it finished."}</p>
+              <div className="mt-3">
+                <RerunControls projectId={project.id} canReuse={hasPages} />
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {cancelled ? (
+          <Alert className="border-line bg-white text-ink">
+            <TriangleAlert aria-hidden="true" />
+            <AlertTitle>The scan was cancelled</AlertTitle>
+            <AlertDescription>
+              <p>Start it again when you are ready.</p>
+              <div className="mt-3">
+                <RerunControls projectId={project.id} canReuse={hasPages} />
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {finishedWithoutSheet ? (
+          <Alert className="border-warn/30 bg-warn-soft text-warn">
+            <TriangleAlert aria-hidden="true" />
+            <AlertTitle>The scan finished but saved no fact sheet</AlertTitle>
+            <AlertDescription className="text-warn/90">
+              <p>Run it again. If it happens twice, email help@legiit.com with this page address.</p>
+              <div className="mt-3">
+                <RerunControls projectId={project.id} canReuse={hasPages} />
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {!runView && !factSheet ? (
+          <div className="rounded-card border border-line bg-white p-8 shadow-card">
+            <p className="eyebrow text-brand">Nothing scanned yet</p>
+            <h2 className="mt-2 text-xl">Read the site and build the fact sheet</h2>
+            <p className="mt-2 max-w-xl text-ink-muted">
+              We read the pages that matter, pull out the facts with a quote and a source for each one, and show
+              you what the site does not say.
+            </p>
+            <div className="mt-6">
+              <StartScanButton projectId={project.id} />
             </div>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {cancelled ? (
-        <Alert className="border-line bg-white text-ink">
-          <TriangleAlert aria-hidden="true" />
-          <AlertTitle>The scan was cancelled</AlertTitle>
-          <AlertDescription>
-            <p>Start it again when you are ready.</p>
-            <div className="mt-3">
-              <RerunControls projectId={project.id} canReuse={hasPages} />
-            </div>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {finishedWithoutSheet ? (
-        <Alert className="border-warn/30 bg-warn-soft text-warn">
-          <TriangleAlert aria-hidden="true" />
-          <AlertTitle>The scan finished but saved no fact sheet</AlertTitle>
-          <AlertDescription className="text-warn/90">
-            <p>Run it again. If it happens twice, email help@legiit.com with this page address.</p>
-            <div className="mt-3">
-              <RerunControls projectId={project.id} canReuse={hasPages} />
-            </div>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {!runView && !factSheet ? (
-        <div className="rounded-card border border-line bg-white p-8 shadow-card">
-          <p className="eyebrow text-brand">Nothing scanned yet</p>
-          <h2 className="mt-2 text-xl">Read the site and build the fact sheet</h2>
-          <p className="mt-2 max-w-xl text-ink-muted">
-            We read the pages that matter, pull out the facts with a quote and a source for each one, and show
-            you what the site does not say.
-          </p>
-          <div className="mt-6">
-            <StartScanButton projectId={project.id} />
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {factSheet ? (
-        <>
-          <FactSheetReview key={factSheet.id} factSheet={factSheet} spec={spec} pages={pageSummaries} />
-          <div className="space-y-4">
-            <PagesPanel pages={pageDetails} />
-            <ExistingSchemaPanel groups={groups} />
-          </div>
-        </>
-      ) : null}
-    </div>
+        {factSheet ? (
+          <>
+            <FactSheetReview key={factSheet.id} factSheet={factSheet} spec={spec} pages={pageSummaries} />
+            <div className="space-y-4">
+              <PagesPanel pages={pageDetails} />
+              <ExistingSchemaPanel groups={groups} />
+            </div>
+          </>
+        ) : null}
+      </div>
+    </GenerateProvider>
   );
 }

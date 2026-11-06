@@ -1,20 +1,6 @@
-"use client";
-
-import { Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-/** Generation is slice 3. The button is here so the screen reads complete. */
-export function GenerateButton() {
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" tabIndex={0} />}>
-        <Button variant="primary" size="sm" disabled aria-disabled="true">
-          <Sparkles aria-hidden="true" />
-          Generate the page
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>Arrives with the next release</TooltipContent>
-    </Tooltip>
-  );
-}
+/*
+  The project header's "Generate the page" button. The real one lives with
+  the other generation components and reads its state from GenerateProvider,
+  which the project and page screens render around the header.
+*/
+export { GenerateButton } from "@/components/app/generate/generate-button";
