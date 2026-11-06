@@ -338,15 +338,16 @@ route. On Supabase the RLS checks now cover `generations` and `share_links`.
   Portal, and the webhook have run only in unit tests with a fake Stripe event
   and the fake database. `docs/deploy.md` has the setup and a test-mode
   checklist.
-- The writer on a real site since the integration. The e2e uses a stand-in
-  model; the prompts were tuned on two real pages before the other modules
-  landed (commits `a5a90a7` and `dee507b`).
+- The writer on more than two real sites. The e2e uses a stand-in model; the
+  prompts were tuned on two real pages (commits `a5a90a7` and `dee507b`), and
+  one page was generated through the real routes after the integration
+  (legiit.com: 22 seconds, $0.09, lint passed after one rewrite).
 - The magic-link email itself (the template and the redirect allow-list are
   set, and the built-in mailer allows two emails an hour).
 
 **Open items**
-- The deterministic JSON-LD findings do not map a site block's `@type`
-  (RoofingContractor on the stand-in site) to `business_type`, so the schema
-  says `Organization` until the owner answers the business-type question.
+- A site's own JSON-LD type becomes `business_type` only when it is more
+  specific than `Organization`; a site whose SEO plugin writes `Organization`
+  still depends on the model's reading and the owner's answer.
 - The Open Graph image from the slice 6 list is not built; the dark CTA band,
   the landing page sections, and the empty and error states are.

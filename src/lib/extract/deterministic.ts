@@ -115,6 +115,20 @@ function isOrgType(type: string): boolean {
   return ORG_SUFFIX.test(type);
 }
 
+/** Types that say nothing about the kind of business beyond the fallback the schema uses anyway. */
+const GENERIC_ORG_TYPES = new Set(["Organization", "Corporation", "Thing"]);
+
+/**
+ * The site's own schema.org type for the business, when it says more than
+ * Organization: a LocalBusiness block, or a subtype such as RoofingContractor.
+ * The generic types are left to the model and the owner, since an SEO plugin
+ * writes Organization on every site whatever the business is.
+ */
+function mapBusinessType(types: string[], node: JsonObject, c: Collector): void {
+  const specific = types.find((t) => isOrgType(t) && !GENERIC_ORG_TYPES.has(t));
+  if (specific) c.add("business_type", specific, quoteOf(node["@type"]));
+}
+
 /** Keys under which an Organization node describes some other organization, not this business. */
 const OTHER_ORG_KEYS = new Set([
   "memberOf", "parentOrganization", "subOrganization", "brand", "sponsor", "funder",
@@ -483,7 +497,10 @@ export function findingsFromJsonLd(blocks: JsonLdBlock[], url: string): Finding[
       const types = typesOf(node);
       if (!types.length) continue;
       const otherOrg = parentKey !== null && OTHER_ORG_KEYS.has(parentKey);
-      if (!otherOrg && types.some(isOrgType)) mapOrganization(node, c);
+      if (!otherOrg && types.some(isOrgType)) {
+        mapOrganization(node, c);
+        mapBusinessType(types, node, c);
+      }
       if (types.includes("Person")) mapPersonProfiles(node, c);
       if (types.includes("Question")) mapQuestion(node, c);
       if (!otherOrg && types.includes("Service")) mapService(node, c);

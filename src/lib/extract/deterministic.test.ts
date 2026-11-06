@@ -261,6 +261,34 @@ describe("findingsFromLinks", () => {
   });
 });
 
+describe("findingsFromJsonLd business type", () => {
+  const block = (data: Json): JsonLdBlock => ({ data, raw: JSON.stringify(data), types: [] });
+  const typeOf = (data: Json) => byField(findingsFromJsonLd([block(data)], url), "business_type");
+
+  it("takes a specific type from the site's own organization block, with the raw type as the quote", () => {
+    expect(typeOf({ "@context": "https://schema.org", "@type": "RoofingContractor", name: "Acme Roofing" })).toEqual([
+      { fieldId: "business_type", value: "RoofingContractor", quote: "RoofingContractor", url, source: "jsonld", confidence: 0.9 },
+    ]);
+    const both = typeOf({ "@context": "https://schema.org", "@type": ["LocalBusiness", "Dentist"], name: "Bright Smiles" });
+    expect(both.map((f) => f.value)).toEqual(["LocalBusiness"]);
+    expect(both[0].quote).toBe(JSON.stringify(["LocalBusiness", "Dentist"]));
+  });
+
+  it("leaves the generic types, other organizations, and people alone", () => {
+    expect(typeOf({ "@context": "https://schema.org", "@type": "Organization", name: "Acme Roofing" })).toEqual([]);
+    expect(typeOf({ "@context": "https://schema.org", "@type": "Corporation", name: "Acme Roofing" })).toEqual([]);
+    expect(
+      typeOf({
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: "Acme Roofing",
+        memberOf: { "@type": "ProfessionalService", name: "The Roofers Guild" },
+      }),
+    ).toEqual([]);
+    expect(typeOf({ "@context": "https://schema.org", "@type": "Person", name: "Maria Lopez" })).toEqual([]);
+  });
+});
+
 describe("findingsFromJsonLd person profiles", () => {
   it("gives a Person node's sameAs that person's name as owner, wherever the node sits", () => {
     const article: Json = {
