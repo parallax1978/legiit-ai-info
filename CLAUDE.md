@@ -15,6 +15,7 @@ pnpm lint         # eslint
 pnpm test         # vitest run
 pnpm db:check     # apply migrations to a local PostgreSQL and run the RLS checks (needs a running server, see below)
 pnpm e2e:local    # the whole scan through the route handlers on a local PostgreSQL (same server as db:check)
+pnpm e2e:supabase # the same scan on the Supabase project whose URL and keys are in .env.local
 SITES=https://a.com,https://b.com pnpm smoke:crawl   # live crawl, no database or model; writes smoke-crawl-report.txt
 ```
 
@@ -29,16 +30,28 @@ Local migration check: start PostgreSQL 16 on port 54329 with trust auth, create
 database `lai`, then `pnpm db:check`. The harness in `supabase/test/harness.sql`
 stands in for the `auth` and `storage` schemas Supabase manages.
 
-`pnpm e2e:local` recreates the database `lai_e2e`, applies every migration, and
-drives a scan of a made-up roofing site through the real route handlers: create
-the project, step the run to a fact sheet, edit it concurrently, re-run from
-stored pages, and race two steps for the lock. Every query runs on PostgreSQL
-through supabase-js. `scripts/e2e/postgrest-lite.ts` stands in for PostgREST and
-Storage (it builds PostgREST's SQL, so constraint, enum, NULL, and timestamp
-behavior is PostgreSQL's own), and `scripts/e2e/fakes.ts` stands in for the
-site and the Anthropic API. Run it after changing queries, migrations, the run
-state machine, or route handlers. When the app starts using a PostgREST feature
-the stand-in does not answer (embedding, RPC), it fails loudly; add it there.
+The end-to-end run (`scripts/e2e/pipeline.e2e.ts`) drives a scan of a made-up
+roofing site through the real route handlers: create the project, step the run
+to a fact sheet, edit it concurrently, re-run from stored pages, and race two
+steps for the lock. Every query runs through supabase-js. The site and the
+Anthropic API are stand-ins in both modes (`scripts/e2e/fakes.ts`), and the
+session cookie is a mocked `requireApiUser`, because the handlers read cookies
+through `next/headers`.
+
+- `pnpm e2e:local` recreates the database `lai_e2e` on the db:check server and
+  applies every migration. `scripts/e2e/postgrest-lite.ts` stands in for
+  PostgREST and Storage; it builds PostgREST's SQL, so constraint, enum, NULL,
+  and timestamp behavior is PostgreSQL's own. When the app starts using a
+  PostgREST feature it does not answer (embedding, RPC), it fails loudly.
+- `pnpm e2e:supabase` runs the same file on the Supabase project in `.env.local`.
+  PostgREST, Storage, Auth, and RLS are the real ones: the test users are auth
+  users made with the admin API, and four more tests sign in with the
+  publishable key and check what the browser can see and do. The users' data
+  from the last run is removed before each run; the run's own data is left for
+  the dashboard.
+
+Run both after changing queries, migrations, policies, the run state machine,
+or route handlers. `scripts/e2e/backend.ts` is where a mode starts.
 
 ## Layout
 

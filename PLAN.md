@@ -266,11 +266,17 @@ per WordPress page, a 404 on servers that do not redirect), a menu link that
 redirects to a sitemap page was read and paid for twice, and redirect hops were
 not checked against robots.txt.
 
-**Not yet verified with the real services.** There was no Supabase project or
-Anthropic key in the build environment, so the magic link, real PostgREST and
-Storage, and Haiku's actual output have not run together. The first deploy
-should run one scan on a known site and read crawl_runs.log and llm_calls (see
-docs/deploy.md).
+**Verified on Supabase.** Both migrations are applied to the project (ref
+`nitzqpumgpwfqphlygyp`), and `pnpm e2e:supabase` passes against it: auth users
+made with the admin API get their profile row from the trigger, every query the
+scan makes runs on the real PostgREST, HTML lands in the private bucket, and
+the browser key reads only its owner's rows and can write none of them.
+
+**Not yet verified with the real services:** the magic-link email itself (the
+template and the redirect allow-list are set), and a scan with the real model,
+because no Anthropic key was available in the build environment. The first
+deploy should run one scan on a known site and read crawl_runs.log and
+llm_calls (see docs/deploy.md).
 
 **Open items for later slices**
 - Usage caps on POST /api/projects and POST /api/projects/[id]/runs (slice 5).

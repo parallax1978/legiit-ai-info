@@ -5,6 +5,13 @@ Three services: Supabase (database, auth, storage), Vercel (the app), Anthropic
 
 ## 1. Supabase
 
+The project exists: "Legiit Ai Info", ref `nitzqpumgpwfqphlygyp`, us-east-1,
+PostgreSQL 17. On 2026-11-06 both migrations were applied to it and recorded in
+`supabase_migrations.schema_migrations`, so `supabase db push` sees them as
+applied, and `pnpm e2e:supabase` passes against it. Its URL and keys are in
+`.env.local` on the machine that set it up; they are also under Project
+Settings > API Keys in the dashboard. The steps below are for a new project.
+
 1. Create a project. Note the project URL, the publishable (or anon) key, and the
    secret (or service_role) key from Project Settings > API.
 2. Apply every file in `supabase/migrations` in order, in the SQL editor or with
@@ -13,16 +20,23 @@ Three services: Supabase (database, auth, storage), Vercel (the app), Anthropic
    `crawl-html` and `exports` storage buckets. `0002_tighten_rls.sql` is not
    optional: it revokes writes from the browser key, without which a signed-in
    user could set their own plan to paid. `pnpm db:check` runs the same
-   migrations and the RLS checks against a local PostgreSQL (see CLAUDE.md).
+   migrations and the RLS checks against a local PostgreSQL, and
+   `pnpm e2e:supabase` runs a whole scan against the project (see CLAUDE.md).
 3. Authentication > URL Configuration: set the Site URL to the app's origin and
    add `https://<your-domain>/auth/callback?*` and
    `http://localhost:3000/auth/callback?*` to the redirect allow-list. The magic
-   link carries `?next=`, so the wildcard matters.
-4. Authentication > Providers: Email is on by default (magic link needs no
+   link carries `?next=`, so the wildcard matters. The existing project allows
+   `http://localhost:3000` and `https://legiitaiinfo.com`; add the Vercel URL
+   when it is known, and nothing wider (a wildcard over `vercel.app` would let
+   a magic link land on someone else's site).
+4. Authentication > SMTP Settings: set up a mail provider before launch. The
+   built-in email service sends 2 emails an hour per project, so magic links
+   stop arriving after the second sign-in in an hour.
+5. Authentication > Providers: Email is on by default (magic link needs no
    password). For Google, create an OAuth client in Google Cloud with the
    Supabase callback URL shown in the provider settings, paste the client id and
    secret, then set `NEXT_PUBLIC_GOOGLE_AUTH=1` on the app so the button shows.
-5. Authentication > Email templates: the default "Magic Link" template works.
+6. Authentication > Email templates: the default "Magic Link" template works.
    Keep `{{ .ConfirmationURL }}` in it.
 
 ## 2. Vercel
@@ -47,6 +61,13 @@ without a limit, and each scan spends Haiku tokens on up to 40 pages. Keep the
 site unlisted, or watch `llm_calls`, until the caps ship.
 
 ## 3. First run checklist
+
+What `pnpm e2e:supabase` already proves on the project: auth users get a
+profile row, every query the scan makes runs on PostgREST, HTML lands in the
+private bucket and stays private, the browser key reads only its owner's rows
+and writes none of them, and concurrent edits and racing steps behave. What it
+does not: the magic-link email itself, and a scan with the real model (it uses
+a stand-in for the Anthropic API). The checklist covers those.
 
 1. Open the site, enter a URL in the hero, sign in with the magic link, and watch
    the scan on the project page.

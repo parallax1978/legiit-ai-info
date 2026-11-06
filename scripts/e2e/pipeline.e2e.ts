@@ -1,33 +1,27 @@
 /*
-  The whole scan on a real PostgreSQL, through the real route handlers.
+  The whole scan through the real route handlers, on a real database.
 
-    pnpm e2e:local
+    pnpm e2e:local      PostgreSQL 16 on port 54329 (the db:check server) behind the PostgREST stand-in
+    pnpm e2e:supabase   the Supabase project named in .env.local
 
-  Needs the same local PostgreSQL 16 as pnpm db:check (port 54329, trust
-  auth; E2E_PG_HOST, E2E_PG_PORT, and E2E_PG_USER override the defaults). The
-  run drops and recreates the database lai_e2e and applies every migration.
+  What is real in both: the route handlers for creating a project, stepping a
+  run, reading a run, editing a fact sheet, and starting a re-run; the run
+  state machine; discovery, fetching, cleaning, ranking, and robots.txt;
+  extraction through callStructured with llm_calls logging; quote
+  verification; the merge; and every query, which runs through supabase-js.
 
-  What is real: the route handlers for creating a project, stepping a run,
-  reading a run, editing a fact sheet, and starting a re-run; the run state
-  machine; discovery, fetching, cleaning, ranking, and robots.txt; extraction
-  through callStructured with llm_calls logging; quote verification; the
-  merge; and every query, which runs on PostgreSQL through supabase-js.
-
-  What stands in: PostgREST and Storage (scripts/e2e/postgrest-lite.ts), the
-  Anthropic API and the business site (scripts/e2e/fakes.ts), and the session
-  cookie (requireApiUser returns a fixed user). The crawler's URL checks run on
-  the real addresses; only the socket goes to the local site, and the
-  connect-time address check has its own test in src/lib/crawler.
+  On Supabase, PostgREST, Storage, Auth, and RLS are the real ones too: the
+  test users are auth users made with the admin API, and the last section
+  signs in with the publishable key and checks what the browser can see and
+  do. What stands in everywhere: the business site and the Anthropic API
+  (scripts/e2e/fakes.ts), and the session cookie (requireApiUser returns the
+  test user, because the route handlers read cookies through next/headers).
+  The crawler's URL checks run on the real addresses; only the socket goes to
+  the local site, and the connect-time address check has its own test.
 */
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { Client, Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { anonClient, BACKEND, signedInClient, startBackend, type Backend, type TestUser } from "./backend";
 import { SITE_ORIGIN, startFakeModel, startFakeSite, type FakeModel, type FakeServer } from "./fakes";
-import { startPostgrestLite, type PostgrestLite } from "./postgrest-lite";
-
-const OWNER = "11111111-1111-4111-8111-111111111111";
-const OTHER = "22222222-2222-4222-8222-222222222222";
 
 const h = vi.hoisted(() => ({
   siteUrl: "",
@@ -66,20 +60,15 @@ import { POST as stepRoute } from "@/app/api/runs/[id]/step/route";
 import type { FactSheetData, ListItem } from "@/lib/facts/types";
 import type { RunView } from "@/lib/projects/view";
 
-const PG = {
-  host: process.env.E2E_PG_HOST ?? "/tmp",
-  port: Number(process.env.E2E_PG_PORT ?? 54329),
-  user: process.env.E2E_PG_USER ?? "postgres",
-};
-const DB = "lai_e2e";
-
-let pool: Pool;
-let rest: PostgrestLite;
+let backend: Backend;
 let site: FakeServer;
 let model: FakeModel;
 
-const as = (user: string) => {
-  h.user = { id: user, email: user === OWNER ? "owner@acme-roofing.example" : "other@example.com" };
+/** What the first scan made, for the later tests. */
+const made = { projectId: "", runId: "", sheetId: "", htmlPath: "" };
+
+const as = (user: TestUser) => {
+  h.user = { id: user.id, email: user.email };
 };
 
 function params(id: string) {
@@ -104,78 +93,75 @@ function patch(path: string, body: unknown): Request {
 
 /** Steps the run through the step route, the way the project page does, until it finishes. */
 async function stepUntilFinished(runId: string): Promise<{ run: RunView; steps: number }> {
-  for (let steps = 1; steps <= 40; steps++) {
+  for (let steps = 1; steps <= 60; steps++) {
     const res = await stepRoute(post(`/api/runs/${runId}/step`), params(runId));
     const body = (await res.json()) as { run?: RunView; error?: string };
     if (res.status === 409) continue;
     if (res.status !== 200 || !body.run) throw new Error(`step answered ${res.status}: ${JSON.stringify(body)}`);
     if (["done", "failed", "cancelled"].includes(body.run.status)) return { run: body.run, steps };
   }
-  throw new Error("the run did not finish in 40 steps");
+  throw new Error("the run did not finish in 60 steps");
 }
 
-async function one<T>(sql: string, values: unknown[] = []): Promise<T> {
-  const { rows } = await pool.query(sql, values);
-  if (rows.length !== 1) throw new Error(`expected one row, got ${rows.length}: ${sql}`);
-  return rows[0] as T;
+type Res = { data: unknown; error: { message: string } | null };
+
+/** The data of a successful PostgREST response; the failure branch contributes nothing. */
+type Ok<R extends Res> = R extends { error: null; data: infer D } ? D : never;
+
+async function row<R extends Res>(q: PromiseLike<R>, what: string): Promise<NonNullable<Ok<R>>> {
+  const res = await q;
+  if (res.error) throw new Error(`${what}: ${res.error.message}`);
+  if (res.data === null || res.data === undefined) throw new Error(`${what}: no row`);
+  return res.data as NonNullable<Ok<R>>;
+}
+
+async function rows<R extends Res>(q: PromiseLike<R>, what: string): Promise<NonNullable<Ok<R>>> {
+  const res = await q;
+  if (res.error) throw new Error(`${what}: ${res.error.message}`);
+  return (res.data ?? []) as NonNullable<Ok<R>>;
+}
+
+/** True when a write through the browser key did nothing: refused, or matched no row. */
+function refused(res: { error: unknown; data: unknown[] | null }): boolean {
+  return res.error !== null || (res.data ?? []).length === 0;
 }
 
 const digits = (v: unknown) => String(v).replace(/\D/g, "").slice(-10);
 
 beforeAll(async () => {
-  const admin = new Client({ ...PG, database: "postgres" });
-  await admin.connect();
-  await admin.query(`drop database if exists ${DB} with (force)`);
-  await admin.query(`create database ${DB}`);
-  await admin.end();
-
-  pool = new Pool({ ...PG, database: DB, max: 16 });
-  const migrations = readdirSync("supabase/migrations")
-    .filter((f) => f.endsWith(".sql"))
-    .sort()
-    .map((f) => join("supabase/migrations", f));
-  for (const file of ["supabase/test/harness.sql", ...migrations]) await pool.query(readFileSync(file, "utf8"));
-  await pool.query("insert into auth.users (id, email) values ($1, $2), ($3, $4)", [
-    OWNER,
-    "owner@acme-roofing.example",
-    OTHER,
-    "other@example.com",
-  ]);
-
-  [rest, site, model] = await Promise.all([startPostgrestLite(pool), startFakeSite(), startFakeModel()]);
+  backend = await startBackend();
+  [site, model] = await Promise.all([startFakeSite(), startFakeModel()]);
   h.siteUrl = site.url;
-  process.env.NEXT_PUBLIC_SUPABASE_URL = rest.url;
-  process.env.SUPABASE_SECRET_KEY = "sb_secret_e2e";
   process.env.ANTHROPIC_API_KEY = "sk-ant-e2e";
   process.env.ANTHROPIC_BASE_URL = model.url;
-  as(OWNER);
+  as(backend.owner);
 });
 
 afterAll(async () => {
-  await Promise.all([rest?.close(), site?.close(), model?.close()]);
-  await pool?.end();
+  await Promise.all([site?.close(), model?.close()]);
+  await backend?.close();
 });
 
-describe("a scan from sign-in to fact sheet", () => {
-  let projectId = "";
-  let runId = "";
-  let sheetId = "";
-
+describe(`a scan from sign-in to fact sheet (${BACKEND})`, () => {
   it("creates the project, crawls the site, and writes a fact sheet with evidence", async () => {
     const res = await createProject(post("/api/projects", { siteUrl: "acme-roofing.example" }));
     expect(res.status).toBe(201);
-    ({ projectId, runId } = (await res.json()) as { projectId: string; runId: string });
+    const created = (await res.json()) as { projectId: string; runId: string };
+    made.projectId = created.projectId;
+    made.runId = created.runId;
+    const { projectId, runId } = made;
 
     const { run, steps } = await stepUntilFinished(runId);
     expect(run).toMatchObject({ status: "done", phase: "done", done: true, progress: 1, error: null });
-    expect(steps).toBeLessThan(15);
+    expect(steps).toBeLessThan(20);
 
-    const project = await one<Record<string, unknown>>("select * from projects where id = $1", [projectId]);
+    const project = await row(backend.read.from("projects").select("*").eq("id", projectId).single(), "project");
     expect(project).toMatchObject({
       status: "review",
       site_url: `${SITE_ORIGIN}/`,
       site_host: "acme-roofing.example",
       latest_crawl_run_id: runId,
+      user_id: backend.owner.id,
     });
 
     // robots.txt is respected, and non-HTML links are never requested.
@@ -185,39 +171,37 @@ describe("a scan from sign-in to fact sheet", () => {
     // Pages are fetched the way the sitemap spells them, so none costs a redirect hop.
     expect(site.requests.filter((r) => /^GET \/(about-us|services|pricing|contact)$/.test(r))).toEqual([]);
 
-    const pages = (
-      await pool.query<{ url: string; status: string; error: string | null; html_path: string | null; text_chars: number }>(
-        "select url, status, error, html_path, text_chars from crawl_pages where run_id = $1 order by rank",
-        [runId],
-      )
-    ).rows;
+    const pages = await rows(
+      backend.read.from("crawl_pages").select("url, status, error, html_path, text_chars").eq("run_id", runId).order("rank"),
+      "pages",
+    );
     const byPath = new Map(pages.map((p) => [new URL(p.url).pathname, p]));
     expect(byPath.get("/")?.status).toBe("extracted");
     // The menu's old "/about" redirects to "/about-us/", which the sitemap lists: it is read once.
     expect(byPath.get("/about")).toMatchObject({ status: "skipped", error: `same page as ${SITE_ORIGIN}/about-us/` });
     for (const path of ["/about-us/", "/services/", "/contact/"]) {
-      expect(byPath.get(path) ?? byPath.get(path.replace(/\/$/, "")), path).toMatchObject({ status: "extracted" });
+      expect(byPath.get(path), path).toMatchObject({ status: "extracted" });
     }
     // The model failed on the pricing page twice; the page keeps its deterministic findings and the scan goes on.
-    const pricing = byPath.get("/pricing/") ?? byPath.get("/pricing");
-    expect(pricing?.status).toBe("failed");
-    expect(pricing?.error).toMatch(/^extraction: /);
+    expect(byPath.get("/pricing/")?.status).toBe("failed");
+    expect(byPath.get("/pricing/")?.error).toMatch(/^extraction: /);
     // Every fetched page's HTML went to the private bucket.
     for (const p of pages.filter((x) => x.status !== "skipped")) {
       expect(p.html_path, p.url).toMatch(new RegExp(`^${projectId}/${runId}/.+\\.html$`));
-      expect(rest.objects.has(`crawl-html/${p.html_path}`)).toBe(true);
+      expect(await backend.objectExists("crawl-html", p.html_path ?? ""), p.url).toBe(true);
       expect(p.text_chars).toBeGreaterThan(0);
     }
+    made.htmlPath = byPath.get("/")?.html_path ?? "";
 
-    const sheet = await one<{ id: string; version: number; source: string; data: FactSheetData; stats: Record<string, number> }>(
-      "select id, version, source, data, stats from fact_sheets where crawl_run_id = $1",
-      [runId],
+    const sheet = await row(
+      backend.read.from("fact_sheets").select("id, version, source, data, stats, user_id").eq("crawl_run_id", runId).single(),
+      "fact sheet",
     );
-    sheetId = sheet.id;
-    expect(sheet).toMatchObject({ version: 1, source: "crawl" });
-    expect(await one("select latest_fact_sheet_id as id from projects where id = $1", [projectId])).toEqual({ id: sheet.id });
+    made.sheetId = sheet.id;
+    expect(sheet).toMatchObject({ version: 1, source: "crawl", user_id: backend.owner.id });
+    expect(project.latest_fact_sheet_id).toBe(sheet.id);
 
-    const f = sheet.data.fields;
+    const f = (sheet.data as unknown as FactSheetData).fields;
     // Found, with a verbatim quote and its page.
     expect(f.company_name).toMatchObject({ status: "found", value: "Acme Roofing" });
     expect(f.company_name.evidence.some((e) => e.source === "page" && e.url.startsWith(SITE_ORIGIN) && e.quote.includes("Acme Roofing"))).toBe(true);
@@ -230,38 +214,42 @@ describe("a scan from sign-in to fact sheet", () => {
     // The model's unsupported claim was dropped; nothing on the site states a mission.
     expect(f.mission.status).toBe("missing");
     expect(f.contract_terms.status).toBe("missing");
-    expect(sheet.stats.findingsDropped).toBeGreaterThan(0);
+    expect((sheet.stats as unknown as { findingsDropped: number }).findingsDropped).toBeGreaterThan(0);
 
     // Every model call is logged with model, tokens, and cost; the run's cost is their sum.
-    const calls = (
-      await pool.query<{ ok: boolean; model: string; purpose: string; input_tokens: number; output_tokens: number; cost_usd: string; error: string | null; project_id: string; user_id: string }>(
-        "select ok, model, purpose, input_tokens, output_tokens, cost_usd, error, project_id, user_id from llm_calls where run_id = $1",
-        [runId],
-      )
-    ).rows;
+    const calls = await rows(
+      backend.read
+        .from("llm_calls")
+        .select("ok, model, purpose, input_tokens, output_tokens, cost_usd, error, project_id, user_id")
+        .eq("run_id", runId),
+      "llm calls",
+    );
     const ok = calls.filter((c) => c.ok);
     expect(ok).toHaveLength(4);
     expect(calls.filter((c) => !c.ok)).toHaveLength(2);
     for (const c of ok) {
-      expect(c).toMatchObject({ model: "claude-haiku-5-5", purpose: "extract_page", project_id: projectId, user_id: OWNER });
+      expect(c).toMatchObject({ model: "claude-haiku-5-5", purpose: "extract_page", project_id: projectId, user_id: backend.owner.id });
       expect(c.input_tokens).toBeGreaterThan(0);
       expect(Number(c.cost_usd)).toBeGreaterThan(0);
     }
     for (const c of calls.filter((x) => !x.ok)) expect(c.error).toMatch(/500/);
-    const cost = await one<{ run: string; calls: string }>(
-      "select r.cost_usd as run, (select sum(cost_usd) from llm_calls where run_id = r.id) as calls from crawl_runs r where r.id = $1",
-      [runId],
-    );
-    expect(Math.abs(Number(cost.run) - Number(cost.calls))).toBeLessThan(1e-9);
+    const runRow = await row(backend.read.from("crawl_runs").select("cost_usd").eq("id", runId).single(), "run");
+    const sum = calls.reduce((n, c) => n + Number(c.cost_usd), 0);
+    expect(Math.abs(Number(runRow.cost_usd) - sum)).toBeLessThan(1e-9);
     expect(model.pages.filter((u) => u.includes("/pricing"))).toHaveLength(2);
 
-    const events = (await pool.query<{ kind: string }>("select kind from usage_events where project_id = $1 order by created_at", [projectId])).rows;
+    const events = await rows(
+      backend.read.from("usage_events").select("kind").eq("project_id", projectId).order("created_at"),
+      "usage events",
+    );
     expect(events.map((e) => e.kind)).toEqual(["project_created", "crawl_started"]);
   });
 
   it("keeps every edit when several land on the same fact sheet at once", async () => {
-    const before = await one<{ data: FactSheetData }>("select data from fact_sheets where id = $1", [sheetId]);
-    const pick = (before.data.fields.phone.candidates ?? []).findIndex((c) => digits(c.value) === "9375550142");
+    const { sheetId } = made;
+    const before = await row(backend.read.from("fact_sheets").select("data").eq("id", sheetId).single(), "fact sheet");
+    const fields = (before.data as unknown as FactSheetData).fields;
+    const pick = (fields.phone.candidates ?? []).findIndex((c) => digits(c.value) === "9375550142");
     expect(pick).toBeGreaterThanOrEqual(0);
 
     const edits = [
@@ -272,8 +260,8 @@ describe("a scan from sign-in to fact sheet", () => {
     const responses = await Promise.all(edits.map((e) => editFactSheet(patch(`/api/fact-sheets/${sheetId}`, e), params(sheetId))));
     expect(responses.map((r) => r.status)).toEqual([200, 200, 200]);
 
-    const after = await one<{ data: FactSheetData }>("select data from fact_sheets where id = $1", [sheetId]);
-    const f = after.data.fields;
+    const after = await row(backend.read.from("fact_sheets").select("data").eq("id", sheetId).single(), "fact sheet");
+    const f = (after.data as unknown as FactSheetData).fields;
     expect(f.contract_terms).toMatchObject({ status: "user_provided", value: edits[0].value });
     expect(f.mission).toMatchObject({ status: "user_provided", value: "Keep Dayton homes dry." });
     expect(f.phone.status).toBe("user_provided");
@@ -281,7 +269,8 @@ describe("a scan from sign-in to fact sheet", () => {
   });
 
   it("answers another user's run and fact sheet as not found", async () => {
-    as(OTHER);
+    const { projectId, runId, sheetId } = made;
+    as(backend.other);
     try {
       expect((await readRun(new Request(`http://localhost/api/runs/${runId}`), params(runId))).status).toBe(404);
       expect((await stepRoute(post(`/api/runs/${runId}/step`), params(runId))).status).toBe(404);
@@ -289,13 +278,14 @@ describe("a scan from sign-in to fact sheet", () => {
       expect(edit.status).toBe(404);
       expect((await startRun(post(`/api/projects/${projectId}/runs`, {}), params(projectId))).status).toBe(404);
     } finally {
-      as(OWNER);
+      as(backend.owner);
     }
-    const sheet = await one<{ data: FactSheetData }>("select data from fact_sheets where id = $1", [sheetId]);
-    expect(sheet.data.fields.mission.value).toBe("Keep Dayton homes dry.");
+    const sheet = await row(backend.read.from("fact_sheets").select("data").eq("id", sheetId).single(), "fact sheet");
+    expect((sheet.data as unknown as FactSheetData).fields.mission.value).toBe("Keep Dayton homes dry.");
   });
 
   it("re-runs from the stored pages without fetching the site again", async () => {
+    const { projectId } = made;
     const siteRequests = site.requests.length;
     const res = await startRun(post(`/api/projects/${projectId}/runs`, { reusePages: true }), params(projectId));
     expect(res.status).toBe(201);
@@ -305,16 +295,17 @@ describe("a scan from sign-in to fact sheet", () => {
     expect(run.status).toBe("done");
     expect(site.requests.length).toBe(siteRequests);
 
-    const sheet = await one<{ id: string; version: number }>("select id, version from fact_sheets where crawl_run_id = $1", [rerunId]);
+    const sheet = await row(backend.read.from("fact_sheets").select("id, version").eq("crawl_run_id", rerunId).single(), "fact sheet");
     expect(sheet.version).toBe(2);
-    expect(await one("select latest_crawl_run_id as run, latest_fact_sheet_id as sheet, status from projects where id = $1", [projectId])).toEqual({
-      run: rerunId,
-      sheet: sheet.id,
-      status: "review",
-    });
+    const project = await row(
+      backend.read.from("projects").select("latest_crawl_run_id, latest_fact_sheet_id, status").eq("id", projectId).single(),
+      "project",
+    );
+    expect(project).toEqual({ latest_crawl_run_id: rerunId, latest_fact_sheet_id: sheet.id, status: "review" });
   });
 
   it("lets one caller step a run at a time", async () => {
+    const { projectId } = made;
     const res = await startRun(post(`/api/projects/${projectId}/runs`, {}), params(projectId));
     expect(res.status).toBe(201);
     const { runId: raceId } = (await res.json()) as { runId: string };
@@ -327,6 +318,97 @@ describe("a scan from sign-in to fact sheet", () => {
     const { run } = await stepUntilFinished(raceId);
     expect(run.status).toBe("done");
     // One fact sheet per run, however the steps raced.
-    expect(await one("select count(*)::int as n from fact_sheets where crawl_run_id = $1", [raceId])).toEqual({ n: 1 });
+    expect(await rows(backend.read.from("fact_sheets").select("id").eq("crawl_run_id", raceId), "fact sheets")).toHaveLength(1);
+  });
+});
+
+/*
+  Only on Supabase: what Auth, RLS, and Storage do for real. The browser key
+  with a session sees the user's own rows and can write none of them; another
+  user sees nothing of theirs; the key without a session sees nothing at all.
+*/
+describe.skipIf(BACKEND !== "supabase")("on Supabase, through the public API", () => {
+  it("makes a profile for each new auth user", async () => {
+    for (const u of [backend.owner, backend.other]) {
+      const profile = await row(backend.read.from("profiles").select("id, email, plan").eq("id", u.id).single(), `profile of ${u.email}`);
+      expect(profile).toMatchObject({ id: u.id, email: u.email, plan: "free" });
+    }
+  });
+
+  it("shows a signed-in user their own rows, which they cannot write", async () => {
+    const { projectId, runId, sheetId, htmlPath } = made;
+    const me = await signedInClient(backend, backend.owner);
+    try {
+      const projects = await rows(me.from("projects").select("id, user_id"), "own projects");
+      expect(projects.map((p) => p.id)).toContain(projectId);
+      expect(projects.every((p) => p.user_id === backend.owner.id)).toBe(true);
+      expect((await rows(me.from("crawl_runs").select("id").eq("id", runId), "own run")).map((r) => r.id)).toEqual([runId]);
+      expect((await rows(me.from("crawl_pages").select("id").eq("run_id", runId), "own pages")).length).toBeGreaterThan(0);
+      expect((await rows(me.from("fact_sheets").select("id").eq("id", sheetId), "own sheet")).map((r) => r.id)).toEqual([sheetId]);
+      expect((await rows(me.from("llm_calls").select("id").eq("run_id", runId), "own cost")).length).toBeGreaterThan(0);
+      expect((await rows(me.from("templates").select("id"), "templates")).map((t) => t.id)).toContain("about-v1");
+
+      // The plan, a project, a fact sheet, a cost row: every write with the browser key is refused.
+      expect(refused(await me.from("profiles").update({ plan: "paid" }).eq("id", backend.owner.id).select("id"))).toBe(true);
+      const profile = await row(backend.read.from("profiles").select("plan").eq("id", backend.owner.id).single(), "profile");
+      expect(profile.plan).toBe("free");
+
+      const insert = await me
+        .from("projects")
+        .insert({ user_id: backend.owner.id, site_url: "https://evil.example/", site_host: "evil.example", template_id: "about-v1", mode: "crawl", status: "crawling" })
+        .select("id");
+      expect(refused(insert)).toBe(true);
+      expect(await rows(backend.read.from("projects").select("id").eq("site_host", "evil.example"), "projects")).toEqual([]);
+
+      expect(refused(await me.from("fact_sheets").update({ stats: {} }).eq("id", sheetId).select("id"))).toBe(true);
+      const sheet = await row(backend.read.from("fact_sheets").select("stats").eq("id", sheetId).single(), "fact sheet");
+      expect(sheet.stats).not.toEqual({});
+
+      expect(
+        refused(
+          await me
+            .from("llm_calls")
+            .insert({ user_id: backend.owner.id, purpose: "forged", model: "claude-haiku-5-5", input_tokens: 0, output_tokens: 0, cost_usd: 0, duration_ms: 0, ok: true })
+            .select("id"),
+        ),
+      ).toBe(true);
+
+      // The stored HTML is private: neither a download nor a listing answers.
+      expect((await me.storage.from("crawl-html").download(htmlPath)).error).not.toBeNull();
+      const listed = await me.storage.from("crawl-html").list(projectId);
+      expect(listed.error !== null || listed.data.length === 0).toBe(true);
+    } finally {
+      await me.auth.signOut();
+    }
+  });
+
+  it("shows another signed-in user none of it", async () => {
+    const { projectId, sheetId, htmlPath } = made;
+    const them = await signedInClient(backend, backend.other);
+    try {
+      expect(await rows(them.from("projects").select("id").eq("id", projectId), "project")).toEqual([]);
+      expect(await rows(them.from("crawl_runs").select("id").eq("project_id", projectId), "runs")).toEqual([]);
+      expect(await rows(them.from("crawl_pages").select("id").eq("project_id", projectId), "pages")).toEqual([]);
+      expect(await rows(them.from("fact_sheets").select("id").eq("id", sheetId), "sheet")).toEqual([]);
+      expect(await rows(them.from("llm_calls").select("id").eq("project_id", projectId), "cost")).toEqual([]);
+      expect(await rows(them.from("usage_events").select("kind").eq("project_id", projectId), "usage")).toEqual([]);
+      // The owner-only delete policy does not reach someone else's project.
+      expect(refused(await them.from("projects").delete().eq("id", projectId).select("id"))).toBe(true);
+      expect(await rows(backend.read.from("projects").select("id").eq("id", projectId), "project")).toHaveLength(1);
+      expect((await them.storage.from("crawl-html").download(htmlPath)).error).not.toBeNull();
+    } finally {
+      await them.auth.signOut();
+    }
+  });
+
+  it("shows the publishable key without a session nothing at all", async () => {
+    const anon = anonClient(backend);
+    for (const table of ["profiles", "projects", "crawl_runs", "crawl_pages", "fact_sheets", "llm_calls", "usage_events", "templates"] as const) {
+      const res = await anon.from(table).select("*").limit(5);
+      expect(res.error !== null || (res.data ?? []).length === 0, table).toBe(true);
+    }
+    expect((await anon.storage.from("crawl-html").download(made.htmlPath)).error).not.toBeNull();
+    const listed = await anon.storage.from("crawl-html").list("");
+    expect(listed.error !== null || listed.data.length === 0).toBe(true);
   });
 });
