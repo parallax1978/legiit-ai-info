@@ -34,8 +34,9 @@ import {
   type UrlCandidate,
 } from "@/lib/crawler";
 import type { CrawlRunRow, Json, ProjectRow, RunLogEntry } from "@/lib/db/types";
+import { carryUserEdits } from "@/lib/facts/carry";
 import type { FactSheetData } from "@/lib/facts/types";
-import { mergeFindings } from "@/lib/extract/merge";
+import { mergeFindings, recomputeStats } from "@/lib/extract/merge";
 import { MIN_TEXT_CHARS, deterministicFindings, extractPage, type ExtractPageResult } from "@/lib/extract/page";
 import { StructuredCallError } from "@/lib/llm/client";
 import { runViewFromRow, type RunView } from "@/lib/projects/view";
@@ -46,6 +47,7 @@ import * as q from "./db";
 import {
   MAX_STEP_ERRORS,
   appendLog,
+  carriedMessage,
   chunk,
   companyNameFrom,
   discoveryMessage,
@@ -785,11 +787,20 @@ async function mergeStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
   const withFindings = pages.filter((p) => Array.isArray(p.findings));
   const findings = withFindings.flatMap((p) => p.findings ?? []);
   const droppedCount = pages.reduce((n, p) => n + (p.findings_dropped ?? 0), 0);
-  const { data, stats } = mergeFindings(spec, findings, {
+  const merged = mergeFindings(spec, findings, {
     pagesUsed: withFindings.length,
     droppedCount,
     homeUrl: cursorOf(run).homeUrl ?? project.site_url,
   });
+
+  // The owner's edits on the project's last sheet (typed values, picked
+  // candidates, manual answers) carry onto this one; the scan's own result
+  // for those fields is kept under `crawled`.
+  const previous = project.latest_fact_sheet_id
+    ? await q.getFactSheetForUser(db, project.latest_fact_sheet_id, run.user_id)
+    : null;
+  const { data, carried } = carryUserEdits(previous ? (previous.data as unknown as FactSheetData) : null, merged.data);
+  const stats = carried.length ? recomputeStats(spec, data, merged.stats) : merged.stats;
 
   const factSheetId = await ensureFactSheet(ctx, run, project, {
     template_id: spec.id,
@@ -803,6 +814,7 @@ async function mergeStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
   await syncProject(ctx, run, project, factSheetId, data);
 
   const finishedAt = nowIso();
+  const log = carried.length ? appendLog(run.log, "info", carriedMessage(carried.length), finishedAt) : run.log;
   return writeRun(ctx, run.id, {
     fact_sheet_id: factSheetId,
     phase: "done",
@@ -810,7 +822,7 @@ async function mergeStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
     finished_at: finishedAt,
     pages_extracted: pages.filter((p) => p.status === "extracted").length,
     cursor: completed(cursorOf(run)),
-    log: appendLog(run.log, "info", factSheetReadyMessage(stats), finishedAt),
+    log: appendLog(log, "info", factSheetReadyMessage(stats), finishedAt),
   });
 }
 

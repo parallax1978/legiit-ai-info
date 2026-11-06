@@ -356,13 +356,28 @@ describe(`a scan from sign-in to fact sheet (${BACKEND})`, () => {
     expect(run.status).toBe("done");
     expect(site.requests.length).toBe(siteRequests);
 
-    const sheet = await row(backend.read.from("fact_sheets").select("id, version").eq("crawl_run_id", rerunId).single(), "fact sheet");
+    const sheet = await row(backend.read.from("fact_sheets").select("id, version, data").eq("crawl_run_id", rerunId).single(), "fact sheet");
     expect(sheet.version).toBe(2);
     const project = await row(
       backend.read.from("projects").select("latest_crawl_run_id, latest_fact_sheet_id, status").eq("id", projectId).single(),
       "project",
     );
     expect(project).toEqual({ latest_crawl_run_id: rerunId, latest_fact_sheet_id: sheet.id, status: "review" });
+
+    // The owner's edits carried onto the new sheet; what this scan found sits under crawled.
+    const f = (sheet.data as unknown as FactSheetData).fields;
+    expect(f.contract_terms).toMatchObject({
+      status: "user_provided",
+      value: "No contracts. Every job gets a written quote and is paid on completion.",
+      crawled: { status: "missing" },
+    });
+    expect(f.mission).toMatchObject({ status: "user_provided", value: "Keep Dayton homes dry." });
+    expect(f.phone.status).toBe("user_provided");
+    expect(digits(f.phone.value)).toBe("9375550142");
+    expect(f.phone.candidates).toBeUndefined();
+    expect(f.phone.crawled?.status).toBe("conflict");
+    expect(f.phone.crawled?.candidates?.map((c) => digits(c.value)).sort()).toEqual(["9375550142", "9375550199"]);
+    expect(run.log.map((l) => l.message)).toContain("Kept the 3 fields you edited on the last fact sheet.");
   });
 
   it("refuses a third scan and any page on the free plan, until the plan changes", async () => {
@@ -417,21 +432,20 @@ describe(`a scan from sign-in to fact sheet (${BACKEND})`, () => {
 describe(`a page from the fact sheet to the share link (${BACKEND})`, () => {
   it("writes the page, the schema, and the instructions from the reviewed fact sheet", async () => {
     const { projectId } = made;
-    // The third scan made a fresh fact sheet, so the phone conflict is back. The owner resolves it
-    // and states the contract terms on the review screen before generating, as the flow intends.
+    // The third scan made a fresh fact sheet, and the owner's edits (the picked phone number, the
+    // contract terms, the mission) carried onto it, so the page is written from the reviewed facts.
     const pointer = await row(backend.read.from("projects").select("latest_fact_sheet_id").eq("id", projectId).single(), "project");
     const sheetId = pointer.latest_fact_sheet_id ?? "";
     expect(sheetId).not.toBe("");
-    const sheet = await row(backend.read.from("fact_sheets").select("data").eq("id", sheetId).single(), "fact sheet");
-    const candidates = (sheet.data as unknown as FactSheetData).fields.phone.candidates ?? [];
-    const pick = candidates.findIndex((c) => digits(c.value) === "9375550142");
-    expect(pick).toBeGreaterThanOrEqual(0);
-    for (const edit of [
-      { fieldId: "phone", pickCandidate: pick },
-      { fieldId: "contract_terms", value: "No contracts. Every job gets a written quote and is paid on completion." },
-    ]) {
-      expect((await editFactSheet(patch(`/api/fact-sheets/${sheetId}`, edit), params(sheetId))).status).toBe(200);
-    }
+    const sheet = await row(backend.read.from("fact_sheets").select("version, data").eq("id", sheetId).single(), "fact sheet");
+    expect(sheet.version).toBe(3);
+    const reviewed = (sheet.data as unknown as FactSheetData).fields;
+    expect(digits(reviewed.phone.value)).toBe("9375550142");
+    expect(reviewed.phone.status).toBe("user_provided");
+    expect(reviewed.contract_terms).toMatchObject({
+      status: "user_provided",
+      value: "No contracts. Every job gets a written quote and is paid on completion.",
+    });
 
     const started = await startGeneration(post(`/api/projects/${projectId}/generations`), params(projectId));
     expect(started.status).toBe(201);

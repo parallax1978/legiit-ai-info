@@ -147,6 +147,10 @@ const h = vi.hoisted(() => {
     async factSheetIdForRun(_db: unknown, runId: string) {
       return [...state.sheets.values()].find((s) => s.crawl_run_id === runId)?.id ?? null;
     },
+    async getFactSheetForUser(_db: unknown, sheetId: string, userId: string) {
+      const sheet = state.sheets.get(sheetId);
+      return sheet && sheet.user_id === userId ? copy(sheet) : null;
+    },
     async maxFactSheetVersion(_db: unknown, projectId: string) {
       return Math.max(0, ...[...state.sheets.values()].filter((s) => s.project_id === projectId).map((s) => Number(s.version)));
     },
@@ -353,6 +357,47 @@ describe("stepRun, the happy path", () => {
       latest_fact_sheet_id: sheet.id,
       business_name: "Acme Roofing",
     });
+  });
+
+  it("keeps the owner's edits from the project's last fact sheet on a re-run", async () => {
+    const typed = {
+      value: "No contracts. Every job gets a written quote.",
+      status: "user_provided",
+      evidence: [{ quote: "No contracts. Every job gets a written quote.", url: "", source: "user" }],
+      updatedAt: "2026-11-05T12:00:00.000Z",
+    };
+    const renamed = {
+      value: "Acme Roofing LLC",
+      status: "user_provided",
+      evidence: [{ quote: "Acme Roofing LLC", url: "", source: "user" }],
+      crawled: { value: "Acme Roofing", status: "found", evidence: [] },
+    };
+    h.state.sheets.set("sheet-prev", {
+      id: "sheet-prev",
+      project_id: PROJECT,
+      user_id: USER,
+      crawl_run_id: "run-earlier",
+      version: 1,
+      data: { templateId: "about-v1", fields: { contract_terms: typed, company_name: renamed } },
+    });
+    // Starting the re-run already pointed the project at this run; the sheet pointer is still the old one.
+    seed({ project: { latest_fact_sheet_id: "sheet-prev", status: "review" } });
+
+    const finished = await stepUntilFinished();
+    expect(finished.status).toBe("done");
+
+    const sheet = h.state.sheets.get(String(run().fact_sheet_id))!;
+    expect(sheet.id).not.toBe("sheet-prev");
+    expect(sheet.version).toBe(2);
+    const fields = (sheet.data as { fields: Record<string, Record<string, unknown>> }).fields;
+    expect(fields.contract_terms).toMatchObject({ status: "user_provided", value: typed.value, updatedAt: typed.updatedAt });
+    expect(fields.contract_terms.crawled).toMatchObject({ status: "missing", value: null });
+    // The edited name stays, and what this scan found sits under crawled.
+    expect(fields.company_name).toMatchObject({ status: "user_provided", value: "Acme Roofing LLC" });
+    expect(fields.company_name.crawled).toMatchObject({ status: "found", value: "Acme Roofing" });
+    expect((sheet.stats as { userProvided: number }).userProvided).toBe(2);
+    expect(project()).toMatchObject({ latest_fact_sheet_id: sheet.id, business_name: "Acme Roofing LLC" });
+    expect((run().log as { message: string }[]).map((l) => l.message)).toContain("Kept the 2 fields you edited on the last fact sheet.");
   });
 });
 

@@ -123,6 +123,11 @@ export function extractBatchMessage(extracted: number, done: number, total: numb
 }
 
 /** "Fact sheet ready: 31 found, 3 contradicted, 12 missing". */
+/** The run log line for the owner's edits that carried onto the new fact sheet. */
+export function carriedMessage(count: number): string {
+  return count === 1 ? "Kept the field you edited on the last fact sheet." : `Kept the ${count} fields you edited on the last fact sheet.`;
+}
+
 export function factSheetReadyMessage(stats: Pick<FactSheetStats, "found" | "conflict" | "missing">): string {
   return `Fact sheet ready: ${stats.found} found, ${stats.conflict} contradicted, ${stats.missing} missing`;
 }

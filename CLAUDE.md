@@ -190,6 +190,11 @@ mode starts.
   way an access code would, through the service client.
 - Without Stripe keys the product still runs: billing routes say so, the
   pricing CTA leads to the account page, and admins hand out access codes.
+- A new scan keeps the owner's edits: every `user_provided` field on the
+  project's last fact sheet (typed values, picked candidates, manual answers)
+  carries onto the new sheet, with the scan's own result under `crawled` so
+  "clear" restores it (`src/lib/facts/carry.ts`). Untouched fields take the
+  new result.
 - A failed re-run leaves a project that already has a fact sheet in review; only
   a project with nothing to fall back on is marked failed. Only a project's
   latest run moves its pointers.
