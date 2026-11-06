@@ -100,13 +100,27 @@ function ids(list: unknown): string[] {
   return out;
 }
 
+/** A link as the page can use it: a scheme added where the model left it out ("chrismwalker.io"); nothing that is not a web address. */
+export function webAddress(raw: string): string | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const withScheme = /^https?:\/\//i.test(s) ? s : /^[a-z0-9.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(s) ? `https://${s}` : null;
+  if (!withScheme) return null;
+  try {
+    // Kept as written once it parses, so "https://legiit.com" does not gain a slash.
+    return new URL(withScheme).hostname.includes(".") ? withScheme : null;
+  } catch {
+    return null;
+  }
+}
+
 function links(list: unknown): { label: string; url: string }[] {
   if (!Array.isArray(list)) return [];
   const out: { label: string; url: string }[] = [];
   for (const raw of list) {
     if (!raw || typeof raw !== "object") continue;
     const link = raw as Partial<DraftLinkOutput>;
-    const url = text(link.url);
+    const url = webAddress(text(link.url));
     if (!url) continue;
     out.push({ label: text(link.label) || url, url });
   }

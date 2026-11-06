@@ -12,6 +12,7 @@ import {
   type DraftFaqOutput,
   type DraftMainOutput,
 } from "./schema";
+import { webAddress } from "./schema";
 import type { PageDraft } from "./types";
 
 function mainOutput(): DraftMainOutput {
@@ -236,5 +237,17 @@ describe("round trips", () => {
     out.offerings[0].links.push({ label: "x", url: "https://x.example" });
     expect(draft.intro).toHaveLength(1);
     expect(draft.offerings[0].links).toHaveLength(1);
+  });
+});
+
+describe("webAddress", () => {
+  it("adds the scheme a model left out, keeps addresses as written, and refuses what is not an address", () => {
+    expect(webAddress("chrismwalker.io")).toBe("https://chrismwalker.io");
+    expect(webAddress("legiit.com/about")).toBe("https://legiit.com/about");
+    expect(webAddress("https://legiit.com")).toBe("https://legiit.com");
+    expect(webAddress("http://www.legiit.com/faq?x=1")).toBe("http://www.legiit.com/faq?x=1");
+    expect(webAddress("LinkedIn")).toBeNull();
+    expect(webAddress("")).toBeNull();
+    expect(webAddress("mailto:hi@legiit.com")).toBeNull();
   });
 });

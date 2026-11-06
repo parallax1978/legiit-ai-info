@@ -45,7 +45,8 @@ const SECTION_RULES: Record<string, (spec: TemplateSpec) => string[]> = {
     "intro: two or three paragraphs. The first sentence says what the company is and for whom, from category, core_offering, and ideal_customer. Then founded_date, team_size, and mission where known, each as the fact sheet states it.",
   ],
   offerings: () => [
-    "offerings: one item per services entry. heading: the service's name. paragraphs: two or three sentences from its description, with the price where the fact sheet gives one. links: the service's url when it has one, labelled with the service's name.",
+    "offerings: one item per service or product that has its own description or price. heading: the service's name. paragraphs: two or three sentences from its description, with the price where the fact sheet gives one. links: the service's url when it has one, labelled with the service's name.",
+    "At most eight offerings. When the services are the categories of a marketplace, a menu, or a catalogue (names with a line or less of description each), write one item for the marketplace or the catalogue that names the categories in a sentence or two, not an item per category.",
     "pricing, price_range, contract_terms, and free_offer feed the sentences on cost. The Key facts table repeats them, so state them once.",
   ],
   differentiators: () => [
@@ -56,7 +57,8 @@ const SECTION_RULES: Record<string, (spec: TemplateSpec) => string[]> = {
   team: () => [
     'founders: one item per founders entry. heading: "Name, Title". paragraphs: two sentences of backstory from bio and credentials. links: the person\'s url, linkedin, youtube, x, facebook, instagram, and website, labelled LinkedIn, YouTube, X, Facebook, Instagram, and a site by its domain.',
     'originStory: paragraphs from origin_story. The page renders them under the H3 "How [COMPANY] started".',
-    'team: one item per team_members entry. heading: "Name, Role". paragraphs: one or two sentences from credentials and specialties. links: the profile url when there is one.',
+    'team: one item per team_members entry who is not already in founders (a person appears once on the page). heading: "Name, Role". paragraphs: one or two sentences from credentials and specialties. links: the profile url when there is one.',
+    "Links are full web addresses with their scheme, as the fact sheet gives them.",
     'teamSummary: paragraphs from team_size and team_composition. The page renders them under the H3 "The team".',
   ],
   process: () => [
@@ -88,7 +90,8 @@ function sectionPlan(spec: TemplateSpec): string[] {
   }
   lines.push(
     'Key facts: a table between "How [COMPANY] works" and the FAQ that a program builds from the fact sheet. Do not write it.',
-    "closing: one or two short lines after the FAQ.",
+    "closing: one or two short lines after the FAQ that do not restate the intro: an invitation in the company's own terms, or the company's tagline when the fact sheet has one.",
+    "stillToFill: only required fields with no value, or whose value the owner has not resolved. A field with a value is never listed.",
   );
   return lines;
 }

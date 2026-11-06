@@ -137,7 +137,8 @@ describe("buildWriterSystemPrompt", () => {
   });
 
   it("carries the rules per section", () => {
-    expect(system).toContain("one item per services entry");
+    expect(system).toContain("one item per service or product that has its own description or price");
+    expect(system).toContain("At most eight offerings");
     expect(system).toContain("about five items");
     expect(system).toContain('"> " followed by the quote word for word');
     expect(system).toContain("renders them as a bullet list");
