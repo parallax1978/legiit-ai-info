@@ -1,12 +1,60 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { UpgradeButton } from "@/components/app/account/billing-actions";
 import { buttonVariants } from "@/components/ui/button";
-import { config } from "@/config";
+import { config, type PlanId } from "@/config";
+import { getUser } from "@/lib/auth";
+import { isBillingConfigured } from "@/lib/billing/stripe";
+import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
-export function Pricing() {
+/*
+  The two plan cards. The paid card's button depends on who is looking:
+  signed out, it goes to sign-in and then the account page; signed in on the
+  free plan, it starts Stripe Checkout (or, when billing is not set up, goes
+  to the account page, which says so); signed in on a paid or sponsored plan,
+  it goes to the account page to manage the plan.
+*/
+async function viewer(): Promise<{ signedIn: boolean; plan: PlanId }> {
+  const user = await getUser();
+  if (!user) return { signedIn: false, plan: "free" };
+  const supabase = await createClient();
+  const { data } = await supabase.from("profiles").select("plan").eq("id", user.id).maybeSingle();
+  return { signedIn: true, plan: data?.plan ?? "free" };
+}
+
+const LOGIN_TO_ACCOUNT = "/login?next=%2Faccount";
+
+function PaidCta({ signedIn, plan }: { signedIn: boolean; plan: PlanId }) {
+  const classes = cn(buttonVariants({ variant: "primary", size: "md" }), "mt-6 w-full");
+  if (!signedIn) {
+    return (
+      <Link href={LOGIN_TO_ACCOUNT} className={classes}>
+        Start
+      </Link>
+    );
+  }
+  if (plan !== "free") {
+    return (
+      <Link href="/account" className={classes}>
+        Manage your plan
+      </Link>
+    );
+  }
+  if (!isBillingConfigured()) {
+    return (
+      <Link href="/account" className={classes}>
+        Upgrade
+      </Link>
+    );
+  }
+  return <UpgradeButton label="Upgrade" className="mt-6 w-full" />;
+}
+
+export async function Pricing() {
   const price = config.billing.planPriceUsd;
   const paid = config.plans.paid;
+  const { signedIn, plan } = await viewer();
   const features = [
     `${paid.projectsPerMonth} projects a month`,
     `${paid.crawlsPerProject} scans per project`,
@@ -41,12 +89,7 @@ export function Pricing() {
                 </li>
               ))}
             </ul>
-            <Link
-              href="/login?intent=new"
-              className={cn(buttonVariants({ variant: "primary", size: "md" }), "mt-6 w-full")}
-            >
-              Start
-            </Link>
+            <PaidCta signedIn={signedIn} plan={plan} />
           </div>
 
           <div className="rounded-card border border-line bg-white p-6 shadow-card">
@@ -63,10 +106,10 @@ export function Pricing() {
               and {config.plans.sponsored.crawlsPerProject} scans per project.
             </p>
             <Link
-              href="/login"
+              href={signedIn ? "/account#access-code" : LOGIN_TO_ACCOUNT}
               className={cn(buttonVariants({ variant: "secondary", size: "md" }), "mt-6 w-full")}
             >
-              Sign in and redeem
+              {signedIn ? "Redeem a code" : "Sign in and redeem"}
             </Link>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isUuid, jsonError, readJsonBody, requireApiUser, serverError } from "@/app/api/_lib/http";
+import { checkAllowance } from "@/lib/billing/caps";
 import { createRun } from "@/lib/runs/create";
 import { getProjectForUser } from "@/lib/runs/db";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -14,7 +15,8 @@ const BodySchema = z.object({
 /**
  * POST /api/projects/[id]/runs { reusePages? }: starts a new crawl run. With
  * reusePages, the stored pages of the last run are copied and the run starts
- * at extraction. 201 { runId }.
+ * at extraction. 201 { runId }. 402 with the plan's message when the
+ * project's scan allowance is used up.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireApiUser();
@@ -32,6 +34,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const db = createServiceClient();
     const project = await getProjectForUser(db, id, user.id);
     if (!project) return jsonError(404, "Project not found.");
+
+    const allowance = await checkAllowance(db, { id: user.id, email: user.email ?? null }, "crawl", project.id);
+    if (!allowance.ok) return jsonError(402, allowance.message);
 
     const run = await createRun(db, project, user.id, { reusePages: parsed.data.reusePages === true });
     return NextResponse.json({ runId: run.id }, { status: 201 });
