@@ -85,6 +85,25 @@ export function normalizeUrl(s: string): string {
   return `${host}${path}${query ? `?${query}` : ""}`.toLowerCase();
 }
 
+/**
+ * The identity of a social profile: normalizeUrl, with the spellings one
+ * profile goes by folded together. twitter.com and x.com are one site; a
+ * YouTube channel is the same at /@name, /c/name, and /user/name; the mobile
+ * hosts are the desktop ones. Two links with one key are one profile.
+ */
+export function profileKey(s: string): string {
+  const key = normalizeUrl(s);
+  if (!key) return "";
+  const [host, ...rest] = key.split("/");
+  const path = rest.join("/");
+  const site = host.replace(/^(m|mobile)\./, "").replace(/^twitter\.com$/, "x.com");
+  if (site === "youtube.com") {
+    const m = path.match(/^(?:@|c\/|user\/)([^/?]+)/);
+    if (m) return `youtube.com/@${m[1]}`;
+  }
+  return path ? `${site}/${path}` : site;
+}
+
 const YEAR = /\b(1[89]\d{2}|20\d{2})\b/;
 
 /** The four-digit year when there is one, otherwise the normalized text. */

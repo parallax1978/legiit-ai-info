@@ -14,6 +14,7 @@ import {
   normalizeUrl,
   personNameKey,
   platformFromUrl,
+  profileKey,
   samePerson,
   timeKey,
 } from "./normalize";
@@ -125,6 +126,23 @@ describe("normalizeUrl", () => {
     expect(normalizeUrl("http://legiit.com/?utm_source=x&utm_medium=y")).toBe("legiit.com");
     expect(normalizeUrl("legiit.com/about#team")).toBe("legiit.com/about");
     expect(normalizeUrl("https://x.com/legiitcom?ref=site&fbclid=1")).toBe("x.com/legiitcom?ref=site");
+  });
+});
+
+describe("profileKey", () => {
+  it("folds the spellings of one profile together", () => {
+    expect(profileKey("https://twitter.com/legiitcom")).toBe(profileKey("https://x.com/legiitcom"));
+    expect(profileKey("https://mobile.twitter.com/legiitcom/")).toBe("x.com/legiitcom");
+    expect(profileKey("https://www.youtube.com/c/LegiitOfficial")).toBe("youtube.com/@legiitofficial");
+    expect(profileKey("https://www.youtube.com/user/LegiitOfficial/videos")).toBe("youtube.com/@legiitofficial");
+    expect(profileKey("https://www.youtube.com/@LegiitOfficial")).toBe("youtube.com/@legiitofficial");
+    expect(profileKey("https://m.facebook.com/legiit")).toBe("facebook.com/legiit");
+  });
+  it("keeps different profiles apart and leaves other links alone", () => {
+    expect(profileKey("https://x.com/legiitcom")).not.toBe(profileKey("https://x.com/legiit"));
+    expect(profileKey("https://www.youtube.com/watch?v=abc")).toBe("youtube.com/watch?v=abc");
+    expect(profileKey("https://legiit.com/about/")).toBe("legiit.com/about");
+    expect(profileKey("")).toBe("");
   });
 });
 

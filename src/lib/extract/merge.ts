@@ -27,6 +27,7 @@ import {
   normalizeItemKey,
   normalizeUrl,
   personNameKey,
+  profileKey,
   samePerson,
   timeKey,
 } from "./normalize";
@@ -366,8 +367,8 @@ function sameItem(field: TemplateField, target: MergedItem, v: Variant, listPage
   const a = target.item;
   const b = v.item;
   if (field.itemKind === "social") {
-    const ua = normalizeUrl(a[key] ?? "");
-    const ub = normalizeUrl(b[key] ?? "");
+    const ua = profileKey(a[key] ?? "");
+    const ub = profileKey(b[key] ?? "");
     return !!ua && ua === ub;
   }
   if (!key) return false;

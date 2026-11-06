@@ -6,7 +6,7 @@
   geo, map, areas served, opening hours, price range, and an offer catalog).
   Nothing without a value: empty strings, arrays, and objects are pruned.
 */
-import { clockReadings, datesIn, dayName, daysNamed, normalizeUrl, personNameKey, samePerson, yearOf } from "@/lib/extract/normalize";
+import { clockReadings, datesIn, dayName, daysNamed, personNameKey, profileKey, samePerson, yearOf } from "@/lib/extract/normalize";
 import type { AddressValue, FactSheetData, ListItem } from "@/lib/facts/types";
 import { companyNameOf } from "@/lib/projects/view";
 import type { TemplateSpec } from "@/templates/types";
@@ -275,12 +275,12 @@ function personNode(item: ListItem, titleKey: "title" | "role", profiles: ListIt
   const name = oneLine(item.name);
   if (!name) return null;
   const url = httpUrl(item.url);
-  const seen = new Set<string>(url ? [normalizeUrl(url)] : []);
+  const seen = new Set<string>(url ? [profileKey(url)] : []);
   const sameAs: string[] = [];
   const add = (raw: string | undefined) => {
     const u = httpUrl(raw);
     if (!u) return;
-    const key = normalizeUrl(u);
+    const key = profileKey(u);
     if (seen.has(key)) return;
     seen.add(key);
     sameAs.push(u);
@@ -338,7 +338,7 @@ function businessProfiles(profiles: ListItem[], companyName: string): string[] {
     if (!isBusinessOwner(p.owner, companyName)) continue;
     const u = httpUrl(p.url);
     if (!u) continue;
-    const key = normalizeUrl(u);
+    const key = profileKey(u);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(u);
