@@ -27,7 +27,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
     },
     {
       title: "What it costs",
-      text: `One scan from your plan's allowance. The free plan covers ${config.plans.free.projectsPerMonth} project a month, the paid plan ${config.plans.paid.projectsPerMonth}.`,
+      text: `One project from your plan's allowance. The free plan covers ${config.plans.free.projectsPerMonth} project a month, the paid plan ${config.plans.paid.projectsPerMonth}.`,
     },
   ];
 
@@ -35,7 +35,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl">New project</h1>
       <p className="mt-2 text-ink-muted">
-        Enter the address of the business website. The scan starts right away.
+        Enter the address of the business website, then scan it or fill the facts in by hand.
       </p>
 
       <div className="mt-6 rounded-card border border-line bg-white p-6 shadow-card sm:p-8">

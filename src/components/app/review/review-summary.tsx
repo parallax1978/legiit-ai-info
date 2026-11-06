@@ -1,5 +1,6 @@
-import { CircleCheck } from "lucide-react";
+import { CircleCheck, ListChecks } from "lucide-react";
 import type { FactSheetStats } from "@/lib/facts/types";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { completion, formatNumber, type StatusCounts } from "@/lib/projects/view";
 
@@ -7,8 +8,21 @@ function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
 }
 
-/** "N found, N contradicted, N missing", the required gaps, and a completion meter. */
-export function ReviewSummary({ counts, stats }: { counts: StatusCounts; stats: FactSheetStats | null }) {
+/**
+ * "N found, N contradicted, N missing", the required gaps, a completion
+ * meter, and, while fields are missing, the "Fill the gaps" button that
+ * opens the question flow.
+ */
+export function ReviewSummary({
+  counts,
+  stats,
+  onFillGaps,
+}: {
+  counts: StatusCounts;
+  stats: FactSheetStats | null;
+  /** Opens the question flow. Without it, or with nothing missing, no button is shown. */
+  onFillGaps?: () => void;
+}) {
   const percent = Math.round(completion(counts) * 100);
   const required = counts.requiredMissing;
   return (
@@ -41,6 +55,15 @@ export function ReviewSummary({ counts, stats }: { counts: StatusCounts; stats: 
           Every required field has an answer
         </p>
       )}
+      {onFillGaps && counts.missing > 0 ? (
+        <Button type="button" variant="primary" size="sm" className="mt-3 w-full" onClick={onFillGaps}>
+          <ListChecks aria-hidden="true" />
+          Fill the gaps
+          <span className="rounded-full bg-white/20 px-1.5 text-[11px] tabular-nums" aria-label={`${counts.missing} missing`}>
+            {counts.missing}
+          </span>
+        </Button>
+      ) : null}
       {stats && stats.pagesUsed > 0 ? (
         <p className="mt-3 text-xs text-ink-soft">
           Built from {formatNumber(stats.pagesUsed)} {plural(stats.pagesUsed, "page", "pages")}

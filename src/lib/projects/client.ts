@@ -3,9 +3,12 @@
   project form runs this in the browser.
 */
 
+export type ProjectMode = "crawl" | "manual";
+
 export interface CreateProjectResult {
   projectId: string;
-  runId: string;
+  /** The first scan's run id. Null in manual mode, which starts no scan. */
+  runId: string | null;
 }
 
 /** Turns what someone typed into a URL the API accepts, or null when it cannot be one. */
@@ -45,15 +48,17 @@ async function errorMessage(res: Response): Promise<string> {
 }
 
 /**
- * POST /api/projects with { siteUrl }. Resolves with the new project and its
- * first crawl run, or throws an Error carrying the server's message.
+ * POST /api/projects with { siteUrl, mode }. Crawl mode, the default, resolves
+ * with the new project and its first scan. Manual mode resolves with the
+ * project alone: it starts in review with an empty fact sheet to fill in by
+ * hand. Throws an Error carrying the server's message, which is the plan's
+ * own message when the month's project allowance is used up (402).
  */
-// TODO: the route handler is built by another engineer; this is the agreed contract.
-export async function createProject(siteUrl: string): Promise<CreateProjectResult> {
+export async function createProject(siteUrl: string, mode: ProjectMode = "crawl"): Promise<CreateProjectResult> {
   const res = await fetch("/api/projects", {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ siteUrl }),
+    body: JSON.stringify({ siteUrl, mode }),
     signal: AbortSignal.timeout(30_000),
   });
 
@@ -61,8 +66,8 @@ export async function createProject(siteUrl: string): Promise<CreateProjectResul
 
   const body: unknown = await res.json();
   const { projectId, runId } = (body ?? {}) as { projectId?: unknown; runId?: unknown };
-  if (typeof projectId !== "string" || typeof runId !== "string") {
+  if (typeof projectId !== "string") {
     throw new Error("The server answered without a project id.");
   }
-  return { projectId, runId };
+  return { projectId, runId: typeof runId === "string" ? runId : null };
 }

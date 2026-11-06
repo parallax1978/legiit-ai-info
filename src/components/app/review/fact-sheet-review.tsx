@@ -14,6 +14,7 @@ import {
   type PageSummary,
 } from "@/lib/projects/view";
 import { FieldCard, type FieldActions } from "./field-card";
+import { QuestionFlow } from "./question-flow";
 import { ReviewSummary } from "./review-summary";
 import { SectionNav } from "./section-nav";
 
@@ -40,6 +41,7 @@ export function FactSheetReview({
   const [stats, setStats] = useState<FactSheetStats | null>(hasStats(factSheet.stats) ? factSheet.stats : null);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [flowOpen, setFlowOpen] = useState(false);
 
   // The page keys this component by fact sheet id, so a new version after a
   // re-run mounts a fresh copy with fresh state.
@@ -107,7 +109,7 @@ export function FactSheetReview({
   return (
     <div className="lg:flex lg:items-start lg:gap-8">
       <aside className="space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:w-64 lg:shrink-0 lg:overflow-y-auto">
-        <ReviewSummary counts={counts} stats={stats} />
+        <ReviewSummary counts={counts} stats={stats} onFillGaps={() => setFlowOpen(true)} />
         <SectionNav sections={sections} activeId={activeId} onSelect={select} />
       </aside>
 
@@ -138,6 +140,16 @@ export function FactSheetReview({
           );
         })}
       </div>
+
+      <QuestionFlow
+        open={flowOpen}
+        onOpenChange={setFlowOpen}
+        spec={spec}
+        fields={fields}
+        companyName={companyName}
+        busy={busy}
+        onSave={actions.save}
+      />
     </div>
   );
 }
