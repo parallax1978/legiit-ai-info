@@ -224,9 +224,41 @@ describe("verifyFindings value checks", () => {
         .reason,
     ).toBe("team_members: name: only 0 of 2 words are in the quote or on the page");
     expect(check(page("ideal_customer", "veterans and first responders", INTRO)).reason).toBe(
-      "ideal_customer: only 0 of 3 words are on the page",
+      "ideal_customer: only 0 of 3 words are in the quote",
     );
     expect(check(page("ideal_customer", "children, teens, adults, couples, and families", INTRO)).dropped).toBe(0);
+  });
+
+  it("drops a paraphrase whose words are on the page but not in its quote", () => {
+    // Every word is somewhere on a page of keyword menus; the quote says nothing of the kind.
+    const menus = `${INTRO}\n# Command Center\n# Services\nSEO, writing, design, and marketing services for every online business.`;
+    const r = verifyFindings([page("core_offering", "online marketplace for SEO, writing, design, and marketing services", "Command Center")], menus);
+    expect(r.reasons[0]).toMatch(/core_offering: only 0 of \d+ words are in the quote/);
+    // Half the words in the quote is enough: a short paraphrase of its own quote.
+    const kept = verifyFindings([page("core_offering", "counselling for children, teens, adults, couples, and families", INTRO)], menus);
+    expect(kept.dropped).toHaveLength(0);
+  });
+
+  it("drops a founder whose quote and values never say founder or owner", () => {
+    const profile = "## Katie Freiheit - MA - RCC Registered Clinical Counsellor\nKatie works with adults and couples.";
+    const r = verifyFindings([page("founders", [{ name: "Katie Freiheit", title: "Registered Clinical Counsellor", credentials: "MA, RCC" }], "## Katie Freiheit")], profile);
+    expect(r.reasons[0]).toBe("founders: neither the quote nor the item says founder or founders");
+    const owner = verifyFindings(
+      [page("founders", [{ name: "Darcy Bailey", title: "Owner & Clinical Director" }], "##### Owner & Clinical Director")],
+      `${DARCY_HEADING}\n##### Owner & Clinical Director`,
+    );
+    expect(owner.dropped).toHaveLength(0);
+    // The quote may say it even when the title does not.
+    const quoteSays = verifyFindings(
+      [page("founders", [{ name: "Chris M. Walker", title: "CEO" }], "Chris M. Walker founded Legiit in 2018")],
+      "Chris M. Walker founded Legiit in 2018 and runs it as CEO.",
+    );
+    expect(quoteSays.dropped).toHaveLength(0);
+  });
+
+  it("drops a date value with no year", () => {
+    const r = verifyFindings([page("founded_date", "17 yrs in practice", "over 17 yrs of being in practice")], "We have over 17 yrs of being in practice.");
+    expect(r.reasons[0]).toBe("founded_date: a date needs a year");
   });
 
   it("checks long text against the page: its numbers and most of its words", () => {

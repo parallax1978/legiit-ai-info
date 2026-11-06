@@ -31,6 +31,27 @@ describe("mergeFindings scalars", () => {
     expect(phone.candidates).toBeUndefined();
   });
 
+  it("treats every website_url on the site as the home page, not a conflict between its pages", () => {
+    const { data } = mergeFindings(
+      ABOUT_V1,
+      [
+        finding("website_url", "https://legiit.com/", "https://legiit.com/", "https://legiit.com/", { source: "jsonld", confidence: 0.8 }),
+        finding("website_url", "https://legiit.com/emdr-therapy/", "https://legiit.com/emdr-therapy/", "https://legiit.com/emdr-therapy/", { source: "jsonld", confidence: 0.8 }),
+        finding("website_url", "https://www.legiit.com/faq", "https://www.legiit.com/faq", "https://legiit.com/faq", { source: "jsonld", confidence: 0.8 }),
+        finding("website_url", "https://chrismwalker.io", "https://chrismwalker.io", "https://legiit.com/about"),
+      ],
+      { homeUrl: "https://legiit.com/" },
+    );
+    const site = data.fields.website_url;
+    // The three pages of the site agree on the home page; the founder's own site is still a different value.
+    expect(site.status).toBe("conflict");
+    expect(site.value).toBe("https://legiit.com/");
+    expect(site.candidates?.map((c) => c.value)).toEqual(["https://legiit.com/", "https://chrismwalker.io"]);
+    expect(site.candidates?.[0].evidence).toHaveLength(3);
+    // Without the home URL, nothing changes.
+    expect(mergeFindings(ABOUT_V1, [finding("website_url", "https://legiit.com/faq", "x", "https://legiit.com/faq")]).data.fields.website_url.value).toBe("https://legiit.com/faq");
+  });
+
   it("prefers a full date over the year only when its own quote states the month (DATE-MONTH)", () => {
     const spring = mergeFindings(ABOUT_V1, [
       finding("founded_date", "2018-03", "We opened in the spring of 2018", HOME),

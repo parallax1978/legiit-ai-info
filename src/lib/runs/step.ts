@@ -785,7 +785,11 @@ async function mergeStep(run: CrawlRunRow, ctx: StepContext): Promise<CrawlRunRo
   const withFindings = pages.filter((p) => Array.isArray(p.findings));
   const findings = withFindings.flatMap((p) => p.findings ?? []);
   const droppedCount = pages.reduce((n, p) => n + (p.findings_dropped ?? 0), 0);
-  const { data, stats } = mergeFindings(spec, findings, { pagesUsed: withFindings.length, droppedCount });
+  const { data, stats } = mergeFindings(spec, findings, {
+    pagesUsed: withFindings.length,
+    droppedCount,
+    homeUrl: cursorOf(run).homeUrl ?? project.site_url,
+  });
 
   const factSheetId = await ensureFactSheet(ctx, run, project, {
     template_id: spec.id,

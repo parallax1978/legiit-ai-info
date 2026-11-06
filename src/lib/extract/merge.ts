@@ -16,6 +16,7 @@ import {
   type ListItem,
   type ListItemConflict,
 } from "@/lib/facts/types";
+import { isSameSite } from "@/lib/crawler/url";
 import type { TemplateField, TemplateSpec } from "@/templates/types";
 import {
   datesIn,
@@ -36,6 +37,8 @@ export const MAX_LIST_EVIDENCE = 20;
 export interface MergeOptions {
   pagesUsed?: number;
   droppedCount?: number;
+  /** The site's home page. Every website_url finding on the same site is this URL, not the page it was read from. */
+  homeUrl?: string;
 }
 
 export interface MergeResult {
@@ -145,6 +148,18 @@ function scalarValueOf(field: TemplateField, f: Finding): string | AddressValue 
   if (typeof f.value === "object") return field.type === "address" ? f.value : (f.value.text ?? null);
   if (field.type === "address") return { text: f.value };
   return f.value;
+}
+
+/**
+ * Each page's JSON-LD gives its own address as the site's url. A website_url
+ * on the same site as the home page is the home page, so the field is found
+ * rather than a conflict between every page of the site.
+ */
+function sameSiteAsHome(findings: Finding[], homeUrl: string | undefined): Finding[] {
+  if (!homeUrl) return findings;
+  return findings.map((f) =>
+    f.fieldId === "website_url" && typeof f.value === "string" && isSameSite(f.value, homeUrl) ? { ...f, value: homeUrl } : f,
+  );
 }
 
 function mergeScalar(field: TemplateField, findings: Finding[]): FactField {
@@ -541,7 +556,7 @@ function mergeList(field: TemplateField, findings: Finding[]): FactField {
  */
 export function mergeFindings(spec: TemplateSpec, findings: Finding[], opts: MergeOptions = {}): MergeResult {
   const byField = new Map<string, Finding[]>();
-  for (const f of findings) {
+  for (const f of sameSiteAsHome(findings, opts.homeUrl)) {
     if (!f || typeof f.fieldId !== "string") continue;
     const list = byField.get(f.fieldId);
     if (list) list.push(f);

@@ -12,8 +12,8 @@ export const ABOUT_V1: TemplateSpec = {
   id: "about-v1",
   // 2: social_profiles conflicts on owner. 4: hours are written as the page writes them, and item
   // keys say how the quote check reads them (check). 5 and 6: no example is taken from a client's
-  // site. Raising it re-seeds the templates table.
-  version: 6,
+  // site. 7: founders need evidence that says founder or owner. Raising it re-seeds the templates table.
+  version: 7,
   name: "About page (eight sections)",
   description:
     "Value proposition, what the company does, what makes it different, who uses it, the team, how it works, key facts table, and FAQ, with Organization or LocalBusiness schema plus AboutPage and FAQPage.",
@@ -613,6 +613,10 @@ export const ABOUT_V1: TemplateSpec = {
         "Each founder, co-founder, or owner: full name, title, credentials, a short backstory, their profile page, and personal social links. Names are often spelled or abbreviated differently across pages; keep every variant.",
       question:
         "Who founded or owns the business? For each person: full name, title, credentials, and two sentences of backstory (where they come from, what they did before, why they started this).",
+      evidenceMustMention: [
+        "founder", "founders", "co-founder", "cofounder", "founded", "owner", "owners", "co-owner", "proprietor",
+        "principal", "ceo", "chief executive", "president", "managing director", "managing partner", "partner",
+      ],
       rendersIn: ["page", "schema"],
       itemShape: [
         { key: "name", label: "Full name", type: "text", required: true },

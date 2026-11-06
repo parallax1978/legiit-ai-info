@@ -43,6 +43,12 @@ export const WORD_COVERAGE = {
   summary: 0.5,
   /** A short heading's item and its quote: the share of either's words the other must have (see headingReason). */
   heading: 0.5,
+  /**
+   * Scalars: the share of a value's words that must be in its own quote. A
+   * paraphrase whose words are all somewhere on a page of keyword menus is
+   * not a quote of it ("marketplace of SEO services" under "Command Center").
+   */
+  inQuote: 0.5,
 } as const;
 
 /**
@@ -233,7 +239,12 @@ function wordsReason(stems: string[], min: number, sources: Pick<TextIndex, "ste
 /** Short text: every number in the quote, most of the words on the page. */
 function textReason(value: string, quote: TextIndex, page: TextIndex): string | null {
   const v = normalizeForMatch(value);
-  return numbersReason(v, quote, "in the quote") ?? wordsReason(contentStems(v), WORD_COVERAGE.text, [page, quote], "on the page");
+  const stems = contentStems(v);
+  return (
+    numbersReason(v, quote, "in the quote") ??
+    wordsReason(stems, WORD_COVERAGE.inQuote, [quote], "in the quote") ??
+    wordsReason(stems, WORD_COVERAGE.text, [page, quote], "on the page")
+  );
 }
 
 /** A summary in the model's words: its numbers and most of its words on the page, not necessarily in the quote. */
@@ -283,10 +294,8 @@ type DateCheck = { value: string } | { reason: string };
 function checkDate(value: string, quote: TextIndex): DateCheck {
   const v = normalizeForMatch(value);
   const year = yearOf(v);
-  if (!year) {
-    const reason = numbersReason(v, quote, "in the quote");
-    return reason ? { reason } : { value };
-  }
+  // "17 yrs in practice" is not a date: a date field needs a year.
+  if (!year) return { reason: "a date needs a year" };
   if (!quote.numbers.has(year)) return { reason: `the year ${year} is not in the quote` };
 
   const readings = datesIn(v);
@@ -603,6 +612,20 @@ function checkItem(
   return changed ? { item: kept, changed, reason: null } : { item, changed, reason: null };
 }
 
+/**
+ * A field that needs its evidence to say what the item is (founders: the
+ * quote or the item must say founder, owner, or the like) drops an item whose
+ * quote and values say nothing of the kind: a therapist with a profile page is
+ * not a founder because the model filed her there.
+ */
+function mentionReason(field: TemplateField | undefined, item: ListItem, quote: TextIndex): string | null {
+  const words = field?.evidenceMustMention;
+  if (!words?.length) return null;
+  const hay = normalizeForMatch(`${quote.text} ${Object.values(item).filter((v): v is string => typeof v === "string").join(" ")}`);
+  const found = words.some((w) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(normalizeForMatch(w))}(?![\\p{L}\\p{N}])`, "u").test(hay));
+  return found ? null : `neither the quote nor the item says ${words[0]} or ${words[1] ?? words[0]}`;
+}
+
 function listReason(
   field: TemplateField | undefined,
   value: FactValue,
@@ -619,6 +642,8 @@ function listReason(
   let changed = !Array.isArray(value);
   const out: ListItem[] = [];
   for (const item of items) {
+    const mention = mentionReason(field, item, quote);
+    if (mention) return { value, reason: mention };
     const checked = checkItem(field, item, quote, page, pageUrl);
     if (checked.reason) return { value, reason: checked.reason };
     changed ||= checked.changed;

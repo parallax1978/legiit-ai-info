@@ -78,6 +78,12 @@ export interface TemplateField {
   conflictOn?: string[];
   /** Words from the banned list that are allowed in this field (credentials, modalities). */
   allowlist?: string[];
+  /**
+   * For lists: an item is kept only when its quote or one of its values says
+   * one of these words (founders: founder, owner). A person the model files
+   * as a founder with nothing that calls them one is dropped.
+   */
+  evidenceMustMention?: string[];
   /** Short example to show in the empty state. */
   example?: string;
   /** For `address` fields: the keys of the address object. */
