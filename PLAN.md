@@ -78,7 +78,7 @@ All tables have `created_at`, RLS enabled, and owner policies on `user_id`.
 | `crawl_runs` | per project: status, phase (`discover`, `fetch`, `extract`, `merge`, `done`, `failed`), counters, `cursor` jsonb (the step state), lock fields, error |
 | `crawl_pages` | per run per URL: status, fetched_at, title, meta description, canonical, lang, text, text_chars, `html_path` in Storage, `jsonld` jsonb, `links` jsonb (tel, mailto, social, maps, reviews), `images` jsonb (logo and award candidates), `findings` jsonb (per-page extraction output), extraction tokens and cost |
 | `fact_sheets` | per project, versioned: `data` jsonb keyed by field id, `source` (`crawl`, `manual`), `crawl_run_id` |
-| `generations` | per project, versioned: page_html, wordpress_html, schema jsonb, instructions_md, still_to_fill jsonb, lint_report jsonb, fact_sheet_version, model, tokens, cost (slice 3) |
+| `generations` | per project, versioned: page_html, wordpress_html, schema jsonb, instructions_md, still_to_fill jsonb, lint_report jsonb, fact_sheet_version, model, tokens, cost; migration 0003 adds the job state: draft, cursor, log, lock fields, attempts, title, meta_description, platform, page_url |
 | `llm_calls` | every call: project_id, run_id, purpose, model, input/output/cache tokens, cost_usd, duration_ms, ok, error |
 | `share_links` | token, project_id, generation_id, expires_at (slice 3) |
 | `usage_events` | project created, crawl started, generation started, for caps (slice 5) |
@@ -160,10 +160,12 @@ a day on Hobby) can sweep stalled runs. Neither is needed for slice 1.
    links, pick-one for conflicts, inline editing, questions for missing fields.
    Everything typed is `user_provided`. Existing JSON-LD from the site is shown in its
    own panel with the conflicts against the fact sheet (slice 4 adds the removal note).
-6. **Generate, lint, deliver** (slices 3 and 4): one Sonnet pass from the fact sheet
-   and template spec produces page HTML, WordPress HTML, and schema from one source of
-   truth; deterministic linter with two retries; outputs page, zip, share link,
-   per-platform instructions.
+6. **Generate, lint, deliver** (slices 3 and 4): the writer produces a page draft in
+   three Sonnet calls (the main sections, the FAQ and closing, a rewrite of what the
+   linter flagged); the page HTML, WordPress HTML, and schema are rendered from that
+   one draft and the fact sheet; deterministic linter with two rewrite passes;
+   outputs page, zip, share link, per-platform instructions. Each call is one step
+   of `POST /api/generations/[id]/step`, the way a scan is stepped.
 
 ## Cost model
 
@@ -285,12 +287,66 @@ core_offering candidates from product pages), and lists repeat near-duplicates
 across pages (71 services). The first four are deterministic fixes in
 verification and the merge; the fifth waits for the writer.
 
-**Not yet verified with the real services:** the magic-link email itself (the
-template and the redirect allow-list are set, and the built-in mailer allows
-two emails an hour).
+**Slices 2 to 6 are built** (seven builders on the contracts in
+`docs/build-spec.md`, 41 test files and 688 tests green, typecheck and lint
+clean):
 
-**Open items for later slices**
-- Usage caps on POST /api/projects and POST /api/projects/[id]/runs (slice 5).
-  The usage events they will count are already written. Until the caps ship,
-  any signed-in account can start scans without a limit.
-- Manual mode and the guided question flow (slice 2).
+- Slice 2: manual mode (`POST /api/projects` with `mode: "manual"` makes a
+  project in review with an empty fact sheet, no scan) and the question flow
+  on the review screen, which walks the missing fields, required first, with
+  the field's question and the existing editor.
+- Slice 3: the page writer (`src/lib/generate`): three Sonnet calls through
+  `callStructured` (the main sections, the FAQ and closing, a rewrite of what
+  the linter flagged) with one cached system prompt built from the template
+  spec and a user prompt that carries the fact sheet as compact JSON with its
+  quotes and names the missing and conflicting fields; the deterministic
+  linter (banned words, dashes, numbers not in the fact sheet, FAQ count and
+  length, long sentences, exclamation marks, first person, placeholders, empty
+  entries); the key facts table, the JSON-LD (Organization or a LocalBusiness
+  subtype plus AboutPage + FAQPage, the FAQ word for word), the page and
+  WordPress HTML with still-to-fill comments, and the stepped generation job
+  (`POST /api/generations/[id]/step`, one model call per step, lease lock,
+  attempt ceiling, cost from `llm_calls`); the zip, the HTML route, share
+  links with the public page at `/s/[token]`; the generate button, the
+  progress screen, the generation card, and the page screen with its tabs.
+- Slice 4: the platform is on the generation (from the scan or the project),
+  the install instructions are per platform (WordPress, Shopify, Wix,
+  Squarespace, Webflow, custom, unknown) with where the JSON-LD goes when the
+  editor strips scripts, and the existing-schema notes compare every
+  organization block on the site with the fact sheet and say what to change or
+  remove.
+- Slice 5: caps on every start route (402 with the plan's message, admins
+  exempt), Stripe Checkout, the Customer Portal, the webhook with idempotent
+  and order-safe plan changes, access codes with redemption, the account page
+  (plan, allowance, billing, redeem), the pricing CTA, and the admin pages
+  (cost dashboard, users, access codes, projects).
+- Slice 6: the "next release" placeholders are gone and both flows (scan or
+  fill in by hand) are on the new-project page. The landing page with its dark
+  CTA band, the empty and error states, and the re-run were built in slice 1.
+
+The end-to-end run covers the page in both modes: `pnpm e2e:local` and
+`pnpm e2e:supabase` scan the stand-in site, assert the free plan's 402s,
+change the plan, review the sheet, generate the page through the real step
+route (the stand-in model's main draft carries one banned word, so the lint
+fails once and the rewrite call runs), and check the page, the schema, the
+instructions, the lint report, the cost, the zip, the HTML route, the share
+link and its revocation, and that another user gets 404 from every generation
+route. On Supabase the RLS checks now cover `generations` and `share_links`.
+
+**Not yet verified with the real services:**
+- Stripe. No keys are set on Vercel or in `.env.local`, so Checkout, the
+  Portal, and the webhook have run only in unit tests with a fake Stripe event
+  and the fake database. `docs/deploy.md` has the setup and a test-mode
+  checklist.
+- The writer on a real site since the integration. The e2e uses a stand-in
+  model; the prompts were tuned on two real pages before the other modules
+  landed (commits `a5a90a7` and `dee507b`).
+- The magic-link email itself (the template and the redirect allow-list are
+  set, and the built-in mailer allows two emails an hour).
+
+**Open items**
+- The deterministic JSON-LD findings do not map a site block's `@type`
+  (RoofingContractor on the stand-in site) to `business_type`, so the schema
+  says `Organization` until the owner answers the business-type question.
+- The Open Graph image from the slice 6 list is not built; the dark CTA band,
+  the landing page sections, and the empty and error states are.

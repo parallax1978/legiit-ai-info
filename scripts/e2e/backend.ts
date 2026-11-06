@@ -163,7 +163,12 @@ async function removeStoredHtml(read: SupabaseClient<Database>, projectId: strin
   }
 }
 
-/** Removes what an earlier run left for these users: projects (and everything under them), cost rows, usage events, stored HTML. */
+/**
+ * Removes what an earlier run left for these users: projects (and everything
+ * under them: runs, pages, fact sheets, generations, share links), cost rows,
+ * usage events, stored HTML. The plan goes back to free, where every new user
+ * starts, because the run asserts the free plan's caps before it changes it.
+ */
 async function cleanUp(read: SupabaseClient<Database>, userIds: string[]): Promise<void> {
   const projects = await read.from("projects").select("id").in("user_id", userIds);
   if (projects.error) throw new Error(`list projects: ${projects.error.message}`);
@@ -172,6 +177,8 @@ async function cleanUp(read: SupabaseClient<Database>, userIds: string[]): Promi
     const { error } = await read.from(table).delete().in("user_id", userIds);
     if (error) throw new Error(`clean ${table}: ${error.message}`);
   }
+  const { error } = await read.from("profiles").update({ plan: "free" }).in("id", userIds);
+  if (error) throw new Error(`reset plans: ${error.message}`);
 }
 
 async function startSupabase(): Promise<Backend> {
