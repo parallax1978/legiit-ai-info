@@ -1,6 +1,6 @@
 import { ArrowUpRight } from "lucide-react";
 import { Pill } from "@/components/app/review/status-pill";
-import { RerunControls } from "@/components/app/run/rerun-controls";
+import { RerunControls, StartScanButton } from "@/components/app/run/rerun-controls";
 import { StatusPill } from "@/components/app/shell/status-pill";
 import type { ProjectRow } from "@/lib/db/types";
 import { hostOf, hostPath, isRunFinished, platformLabel, type RunView } from "@/lib/projects/view";
@@ -47,7 +47,12 @@ export function ProjectHeader({
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <RerunControls projectId={project.id} canReuse={hasPages} disabled={running} />
+        {run ? (
+          <RerunControls projectId={project.id} canReuse={hasPages} disabled={running} />
+        ) : (
+          // A manual project has no scan yet: offer the first one, not a re-run.
+          <StartScanButton projectId={project.id} />
+        )}
         <GenerateButton />
       </div>
     </header>

@@ -119,7 +119,7 @@ export function GenerationProgress({ initial }: { initial: GenerationView }) {
             <span className="min-w-0 break-words">{generation.message}</span>
           </h2>
           <p className="mt-1 text-sm text-ink-muted">
-            This takes two or three minutes. You can leave this page; the writing picks up again when you come back.
+            This takes about a minute. You can leave this page; the writing picks up again when you come back.
           </p>
         </div>
         <span className="text-sm font-semibold tabular-nums text-ink-muted">{percent}%</span>
