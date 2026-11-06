@@ -97,5 +97,5 @@ pnpm install
 pnpm dev
 ```
 
-`/dev/review` renders the review screen from the Darcy Bailey fixture without a
+`/dev/review` renders the review screen from the Legiit fixture without a
 database. It returns 404 in production.

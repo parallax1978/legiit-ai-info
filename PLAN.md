@@ -3,7 +3,7 @@
 Legiit Ai Info turns a business website into an AI-ready About page: a fact sheet with
 evidence, a review screen that shows what is found, missing, and contradicted, and then
 the page, the JSON-LD, and install instructions. The two manual runs in `examples/`
-(Legiit and Darcy Bailey & Associates Counselling) are the quality bar.
+(Legiit and a counselling practice) are the quality bar.
 
 This file is the plan. `CLAUDE.md` carries conventions, commands, and running decisions.
 
@@ -87,9 +87,9 @@ A fact sheet field value looks like:
 
 ```json
 {
-  "value": "604-533-9163",
+  "value": "555-0142",
   "status": "found",
-  "evidence": [{ "quote": "Call 604-533-9163", "url": "https://.../contact/", "source": "page" }],
+  "evidence": [{ "quote": "Call 555-0142", "url": "https://.../contact/", "source": "page" }],
   "candidates": [
     { "value": "$195", "evidence": [{ "quote": "...", "url": "..." }] },
     { "value": "$185", "evidence": [{ "quote": "...", "url": "..." }] }

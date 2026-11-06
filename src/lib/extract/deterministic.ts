@@ -189,7 +189,7 @@ function dayName(raw: string): string | null {
   return DAY_ABBREVIATIONS[s.slice(0, 2).toLowerCase()] ?? null;
 }
 
-/** "Monday to Thursday" for a run of three or more days, otherwise the days joined with commas. */
+/** "Monday to Friday" for a run of three or more days, otherwise the days joined with commas. */
 function joinDays(days: string[]): string {
   const unique = [...new Set(days)];
   const indexes = unique.map((d) => WEEK.indexOf(d));

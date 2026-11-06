@@ -421,7 +421,7 @@ interface ItemContext {
   pageUrl: string;
 }
 
-/** Every code ("MSW, RSW, RCC") on the page as the page writes it: an invented credential is a false claim. */
+/** Every code ("CPA, MBA") on the page as the page writes it: an invented credential is a false claim. */
 function codesReason(value: string, page: TextIndex): string | null {
   for (const code of straightenText(value).match(CODE) ?? []) {
     if (!page.codes.has(codeKey(code))) return `${code} is not on the page`;

@@ -158,7 +158,7 @@ const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "satur
 /** A day, a group of days, or every day, as pages write them: "Mon", "Thurs", "Weekdays", "daily", "7 days a week". */
 const DAY_WORD =
   /\b(?:(mon(?:day)?|tue(?:s(?:day)?)?|wed(?:s|nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(weekdays?)|(weekends?)|(daily|everyday|every day|all week|(?:7|seven) days(?: a week)?))\b\.?/g;
-/** What joins the two ends of a run of days: "Mon - Thu", "Monday to Thursday", "Monday through Friday". */
+/** What joins the two ends of a run of days: "Mon - Fri", "Monday to Friday", "Monday through Friday". */
 const DAY_RANGE = /^\s*(?:-|to|through|thru|till|until)\s*$/;
 /** What else a days value may say around its days without saying anything more. */
 const DAY_JOINERS = /\b(?:to|through|thru|till|until|and|from|or)\b|[-&,/:;+]/g;
@@ -186,7 +186,7 @@ export function daysNamed(text: string): Set<number> {
   return out;
 }
 
-/** What a days value says besides its days ("Monday to Thursday, admin office" leaves "admin office"). */
+/** What a days value says besides its days ("Monday to Friday, admin office" leaves "admin office"). */
 export function besidesDays(text: string): string {
   return straightenText(text).toLowerCase().replace(DAY_WORD, " ").replace(DAY_JOINERS, " ").replace(/\s+/g, " ").trim();
 }
@@ -196,7 +196,7 @@ export function dayName(day: number): string {
   return name ? `${name[0].toUpperCase()}${name.slice(1)}` : "";
 }
 
-/** Comparison key for a days value: the days as a set, then anything else it says. "Mon - Thu" and "Monday to Thursday" share one. */
+/** Comparison key for a days value: the days as a set, then anything else it says. "Mon - Fri" and "Monday to Friday" share one. */
 export function dayKey(value: string): string {
   const days = daysNamed(value);
   if (!days.size) return "";
