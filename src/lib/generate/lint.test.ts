@@ -348,6 +348,17 @@ describe("banned words", () => {
     expect(ofKind(report, "banned_word").map((i) => i.text)).toEqual(["premier"]);
   });
 
+  it("lets a banned word through inside a short phrase the fact sheet states, repeated whole", () => {
+    const data = withFields(DATA, { category: { ...DATA.fields.category, value: "curated freelance marketplace" } });
+    expect(lintAfter((d) => (d.intro[0] = "Legiit is a curated freelance marketplace for business owners."), data).passed).toBe(true);
+    // The word on its own, or in another phrase, is still banned.
+    const report = lintAfter((d) => (d.intro[0] = "Legiit offers a curated set of freelancers."), data);
+    expect(ofKind(report, "banned_word").map((i) => i.text)).toEqual(["curated"]);
+    // A long value is not a phrase the page may repeat.
+    const long = withFields(DATA, { mission: { ...DATA.fields.mission, value: "We are passionate about helping every business owner on earth to use Legiit and grow with it." } });
+    expect(ofKind(lintAfter((d) => (d.intro[0] = "Legiit is passionate about business owners."), long), "banned_word").map((i) => i.text)).toEqual(["passionate"]);
+  });
+
   it("lets a quote paragraph through, and flags the same words outside one", () => {
     const line = "We leverage our network, and we are thrilled!";
     expect(lintAfter((d) => (d.differentiators[0].paragraphs[2] = `> ${line}`)).passed).toBe(true);

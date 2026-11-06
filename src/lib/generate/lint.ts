@@ -12,7 +12,9 @@
   (numbers, placeholders, empty).
 
   A banned word is also let through inside a name from the fact sheet
-  ("Premier Roofing") and inside a phrase from a field's allowlist in the
+  ("Premier Roofing"), inside a short phrase the fact sheet states as a value
+  ("curated freelance marketplace", the site's own words for what it is,
+  repeated whole), and inside a phrase from a field's allowlist in the
   template (a modality a counselling practice really offers).
 */
 import type { FactSheetData, FactValue } from "@/lib/facts/types";
@@ -68,6 +70,8 @@ const ABBREVIATIONS = new Set([
 ]);
 /** Scalar fields whose value is a name of the business. List items contribute their "name" key. */
 const NAME_FIELDS = new Set(["company_name", "legal_name", "alternate_names"]);
+/** A scalar value this short is a phrase the page may repeat whole ("curated freelance marketplace"); longer text is not. */
+const PHRASE_MAX_WORDS = 8;
 const BANNED_RE = phraseRegex(BANNED) ?? /(?!)/g;
 
 type Span = readonly [start: number, end: number];
@@ -254,7 +258,7 @@ function namesIn(data: FactSheetData, spec: TemplateSpec): string[] {
   for (const [id, field] of Object.entries(data.fields ?? {})) {
     const value = field.value;
     if (typeof value === "string") {
-      if (NAME_FIELDS.has(id)) names.push(value);
+      if (NAME_FIELDS.has(id) || value.trim().split(/\s+/).length <= PHRASE_MAX_WORDS) names.push(value);
       continue;
     }
     if (!Array.isArray(value)) continue;
