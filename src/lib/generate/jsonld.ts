@@ -6,7 +6,7 @@
   geo, map, areas served, opening hours, price range, and an offer catalog).
   Nothing without a value: empty strings, arrays, and objects are pruned.
 */
-import { clockReadings, datesIn, dayName, daysNamed, normalizeUrl, samePerson, yearOf } from "@/lib/extract/normalize";
+import { clockReadings, datesIn, dayName, daysNamed, normalizeUrl, personNameKey, samePerson, yearOf } from "@/lib/extract/normalize";
 import type { AddressValue, FactSheetData, ListItem } from "@/lib/facts/types";
 import { companyNameOf } from "@/lib/projects/view";
 import type { TemplateSpec } from "@/templates/types";
@@ -299,6 +299,34 @@ function personNode(item: ListItem, titleKey: "title" | "role", profiles: ListIt
   });
 }
 
+/** Team members who are not already founders: a person appears once in the graph. */
+export function nonFounders(team: ListItem[], founders: ListItem[]): ListItem[] {
+  const keys = founders.map((f) => personNameKey(oneLine(f.name))).filter(Boolean);
+  return team.filter((t) => {
+    const key = personNameKey(oneLine(t.name));
+    return !key || !keys.some((k) => k === key || samePerson(k, key));
+  });
+}
+
+/** Keyed without periods or case: "U.S.A." is looked up as "usa". */
+const COUNTRY_CODES: Record<string, string> = {
+  "united states": "US", "united states of america": "US", usa: "US", us: "US", america: "US",
+  canada: "CA", "united kingdom": "GB", uk: "GB", "great britain": "GB", england: "GB", scotland: "GB", wales: "GB",
+  australia: "AU", "new zealand": "NZ", ireland: "IE", germany: "DE", france: "FR", spain: "ES", italy: "IT", netherlands: "NL",
+  "the netherlands": "NL", belgium: "BE", switzerland: "CH", austria: "AT", sweden: "SE", norway: "NO", denmark: "DK", finland: "FI",
+  portugal: "PT", poland: "PL", india: "IN", singapore: "SG", "hong kong": "HK", japan: "JP", "south africa": "ZA", mexico: "MX",
+  brazil: "BR", argentina: "AR", "united arab emirates": "AE", uae: "AE", philippines: "PH", malaysia: "MY", indonesia: "ID",
+  thailand: "TH", vietnam: "VN", "viet nam": "VN", israel: "IL", turkey: "TR", "south korea": "KR", nigeria: "NG", kenya: "KE",
+};
+
+/** The ISO 3166-1 alpha-2 code schema.org asks for ("USA" and "United States" give "US"); an unknown name stays as written. */
+export function countryCode(raw: string): string {
+  const s = oneLine(raw);
+  if (!s) return "";
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
+  return COUNTRY_CODES[s.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim()] ?? s;
+}
+
 function people(items: ListItem[], titleKey: "title" | "role", profiles: ListItem[], companyName: string): Node[] {
   return items.map((item) => personNode(item, titleKey, profiles, companyName)).filter((n): n is Node => n !== null);
 }
@@ -326,7 +354,7 @@ function postalAddress(a: AddressValue | null): Node | null {
     addressLocality: oneLine(a.addressLocality),
     addressRegion: oneLine(a.addressRegion),
     postalCode: oneLine(a.postalCode),
-    addressCountry: oneLine(a.addressCountry),
+    addressCountry: countryCode(a.addressCountry ?? ""),
   });
 }
 
@@ -392,7 +420,7 @@ export function buildJsonLd(input: JsonLdInput): Record<string, unknown> {
     email: fieldText(data, "email").replace(/^mailto:/i, ""),
     foundingDate: isoDate(fieldText(data, "founded_date")),
     founder: people(fieldList(data, "founders"), "title", profiles, companyName),
-    employee: people(fieldList(data, "team_members"), "role", profiles, companyName),
+    employee: people(nonFounders(fieldList(data, "team_members"), fieldList(data, "founders")), "role", profiles, companyName),
     numberOfEmployees: headCount === null ? null : { "@type": "QuantitativeValue", value: headCount },
     address: postalAddress(fieldAddress(data, "headquarters")),
     geo: geo ? { "@type": "GeoCoordinates", ...geo } : null,

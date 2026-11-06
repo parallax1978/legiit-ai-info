@@ -394,8 +394,15 @@ export function missingRequiredFields(
  * are dropped.
  */
 export function stillToFillIds(spec: TemplateSpec, data: FactSheetData | null | undefined, draft: Pick<PageDraft, "stillToFill">): string[] {
-  const wanted = new Set<string>(draft.stillToFill);
-  for (const f of missingRequiredFields(spec, data, null)) wanted.add(f.id);
+  const fields = data?.fields ?? {};
+  // A field is open when the page could not use it: no value, or a conflict the owner has not resolved.
+  const open = (id: string) => {
+    const status = fields[id]?.status ?? "missing";
+    return status === "missing" || status === "conflict";
+  };
+  // The writer's list, less any field that has a value after all; plus every required field that is open.
+  const wanted = new Set<string>(draft.stillToFill.filter(open));
+  for (const f of spec.fields) if (f.required && open(f.id)) wanted.add(f.id);
   return spec.fields.filter((f) => wanted.has(f.id)).map((f) => f.id);
 }
 

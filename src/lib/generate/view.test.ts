@@ -274,9 +274,13 @@ describe("fields", () => {
     expect(missingRequiredFields(spec, null, null)).toHaveLength(3);
   });
 
-  it("unions the writer's still-to-fill ids with the missing required fields, in spec order", () => {
-    expect(stillToFillIds(spec, data, draft)).toEqual(["category", "mission"]);
-    expect(stillToFillIds(spec, data, { stillToFill: ["unknown_field", "founders"] })).toEqual(["category", "founders"]);
+  it("unions the writer's still-to-fill ids with the open required fields, in spec order", () => {
+    const inSpecOrder = (ids: string[]) => spec.fields.filter((f) => ids.includes(f.id)).map((f) => f.id);
+    // category is required and missing; founders is required and an unresolved conflict: both are open.
+    expect(stillToFillIds(spec, data, draft)).toEqual(inSpecOrder(["category", "mission", "founders"]));
+    expect(stillToFillIds(spec, data, { stillToFill: ["unknown_field", "founders"] })).toEqual(inSpecOrder(["category", "founders"]));
+    // A field the writer lists but the fact sheet has a value for is not still to fill.
+    expect(stillToFillIds(spec, data, { stillToFill: ["company_name"] })).toEqual(inSpecOrder(["category", "founders"]));
   });
 
   it("maps ids to questions and leaves unknown ids out", () => {
