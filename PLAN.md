@@ -266,17 +266,25 @@ per WordPress page, a 404 on servers that do not redirect), a menu link that
 redirects to a sitemap page was read and paid for twice, and redirect hops were
 not checked against robots.txt.
 
-**Verified on Supabase.** Both migrations are applied to the project (ref
-`nitzqpumgpwfqphlygyp`), and `pnpm e2e:supabase` passes against it: auth users
+**Live.** The branch is deployed on Vercel at https://legiit-ai-info.vercel.app
+against the Supabase project (ref `nitzqpumgpwfqphlygyp`), with both
+migrations applied. `pnpm e2e:supabase` passes against the project: auth users
 made with the admin API get their profile row from the trigger, every query the
 scan makes runs on the real PostgREST, HTML lands in the private bucket, and
 the browser key reads only its owner's rows and can write none of them.
 
+A real scan of darcybaileycounselling.com with Haiku ran on the project on
+2026-11-06: 40 pages, 175 seconds, $0.086, 1,750 findings of which 82 were
+dropped by verification, a fact sheet of 25 found, 22 contradicted, 1 missing.
+It showed four things to tune: every therapist with a profile page was filed
+as a founder, each page's own JSON-LD url became a website_url candidate, the
+founded date took "17 yrs in practice", and lists repeat near-duplicates
+across pages (71 services). The first three are deterministic fixes in
+verification and the merge; the fourth waits for the writer.
+
 **Not yet verified with the real services:** the magic-link email itself (the
-template and the redirect allow-list are set), and a scan with the real model,
-because no Anthropic key was available in the build environment. The first
-deploy should run one scan on a known site and read crawl_runs.log and
-llm_calls (see docs/deploy.md).
+template and the redirect allow-list are set, and the built-in mailer allows
+two emails an hour).
 
 **Open items for later slices**
 - Usage caps on POST /api/projects and POST /api/projects/[id]/runs (slice 5).

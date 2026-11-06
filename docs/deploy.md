@@ -41,6 +41,16 @@ Settings > API Keys in the dashboard. The steps below are for a new project.
 
 ## 2. Vercel
 
+The project exists: `legiit-ai-info` on the team account, linked to the GitHub
+repository with `main` as its production branch. On 2026-11-06 its framework
+was set to Next.js, the eight variables below were set for production,
+preview, and development, and the branch `claude/friendly-heisenberg-q66yrv`
+was deployed as production through the API, at
+https://legiit-ai-info.vercel.app. `main` holds only the examples folder, so
+until the branch is merged into `main`, a push to `main` would replace the
+site with an empty build; a push to the branch only makes a preview
+deployment. The steps below are for a new project.
+
 1. Import the repository. Framework: Next.js. Package manager: pnpm (detected
    from the lockfile).
 2. Environment variables (see `.env.example`):
