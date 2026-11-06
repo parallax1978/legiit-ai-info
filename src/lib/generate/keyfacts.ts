@@ -192,7 +192,8 @@ function listCell(field: TemplateField, value: ListItem[], companyName: string):
       return nonEmpty(joinCells(collect(awardCell), "; "));
     default: {
       const cells = collect((item) => genericCell(field, item));
-      return nonEmpty(joinCells(cells, listSeparator(cells)));
+      const hours = items.some((item) => item.days && (item.opens || item.closes));
+      return nonEmpty(joinCells(cells, hours ? "; " : listSeparator(cells)));
     }
   }
 }
